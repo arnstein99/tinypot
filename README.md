@@ -5,15 +5,21 @@ This is a very simple telnet honeypot program. It displays a login: prompt, foll
 
 ## Building tinypot
 Just issue this command:
-gcc -pthread tinypot_main.c  tinypot_process.c -o tinypot
+```
+$ gcc -pthread tinypot_main.c  tinypot_process.c -o tinypot
+```
 
 ## Executing tinypot
 The simplest invocation is
+```
 $ tinypot portnum
+```
 Here, portnum is a TCP/IP port number that will be opened for listening. Tinypot will listen on all available network interfaces.
 
 You can also select a specific network interface, by numeric IP address. For example:
+```
 $ tinypot 123.456.12.34 23
+```
 
 ## Comments
 This program provides a simple example of a TCP/IP server program, using BSD socket functions. It is also a simple example of Posix thread programming.
