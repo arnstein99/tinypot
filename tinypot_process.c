@@ -10,13 +10,15 @@
 struct Arg
 {
     int con_num;
+    int port_num;
     int connectFD;
     struct in_addr in;
 };
 
 static void* worker (void* arg);
 
-void process_connection (int con_num, int connectFD,  const struct in_addr* in)
+void process_connection (
+    int con_num, int port_num, int connectFD,  const struct in_addr* in)
 {
     pthread_t thread_handle;
     struct Arg* parg;
@@ -27,6 +29,7 @@ void process_connection (int con_num, int connectFD,  const struct in_addr* in)
 	return;
     }
     parg->con_num = con_num;
+    parg->port_num = port_num;
     parg->connectFD = connectFD;
     parg->in = *in;
 
@@ -55,8 +58,9 @@ static void* worker (void* arg)
 
     fprintf (writeFD, "login: ");
     fflush (writeFD);
-    printf ("%s open connection %s #%d\n",
-        my_time(), inet_ntoa (parg->in), parg->con_num);
+    printf ("%s open connection %s -> port %d    #%d\n",
+        my_time(), inet_ntoa (parg->in), 
+	parg->port_num, parg->con_num);
     fflush (stdout);
     while (read (parg->connectFD, &chr, 1) != 0)
     {

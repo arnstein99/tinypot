@@ -1,5 +1,6 @@
 #include <sys/types.h>
 #include <sys/socket.h>
+#include <sys/select.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <stdio.h>
@@ -8,89 +9,151 @@
 #include <unistd.h>
 #include "tinypot_process.h"
 
+#define INVALID_SOCKET (-1)
+#define MAX(a,b) \
+    ((a) > (b) ? (a) : (b))
+
+typedef struct
+{
+    int port_num;
+    int fd;
+}
+Record;
+
 int main (int argc, char* argv[])
 {
-    struct sockaddr_in sa;
-    int SocketFD;
+    fd_set master_fds;
+    int socketFD;
     int port_num;
     char* address_arg;
-    char* port_arg;
     int con_num;
+    int iarg;
+    Record* record;
+    int num_ports;
+    int maxfd = -1;
 
     switch (argc)
     {
+    case 1:
     case 2:
-        address_arg = "-";
-	port_arg = argv[1];
-        break;
-    case 3:
-        address_arg = argv[1];
-	port_arg = argv[2];
+        fprintf (stderr, "Usage: tinypot [address|-] portnum portnum ...\n");
+	exit (1);
         break;
     default:
-        fprintf (stderr, "Usage: tinypot [address] portnum\n");
-	exit (1);
+        address_arg = argv[1];
         break;
     }
 
-    if (sscanf (port_arg, "%d", &port_num) != 1)
-    {
-        fprintf (stderr, "Illegal numeric expression \"%s\"\n", port_arg);
-	exit (1);
-    }
-
-    SocketFD = socket (PF_INET, SOCK_STREAM, IPPROTO_TCP);
-    if (SocketFD == -1)
-    {
-        perror ("cannot create socket");
-        exit (EXIT_FAILURE);
-    }
-
-    memset (&sa, 0, sizeof sa);
-
-    sa.sin_family = AF_INET;
-    sa.sin_port = htons (port_num);
     if (strcmp (address_arg, "-") == 0)
     {
-	sa.sin_addr.s_addr = htonl (INADDR_ANY);
-	address_arg = "*";
+        address_arg = "*";
     }
-    else
-	sa.sin_addr.s_addr = inet_addr (address_arg);
-
-    if (bind (SocketFD, (struct sockaddr *) &sa, sizeof sa) == -1)
+    num_ports = argc - 2;
+    if ((record = (Record*)malloc (num_ports * sizeof (Record))) == NULL)
     {
-        perror ("bind failed");
-        close (SocketFD);
-        exit (EXIT_FAILURE);
+        perror ("malloc");
+	exit (EXIT_FAILURE);
+    }
+    FD_ZERO (&master_fds);
+    for (iarg = 2 ; iarg < argc ; ++iarg)
+    {
+	char* port_arg = argv[iarg];
+	struct sockaddr_in sa;
+	if (sscanf (port_arg, "%d", &port_num) != 1)
+	{
+	    fprintf (stderr, "Illegal numeric expression \"%s\"\n", port_arg);
+	    exit (1);
+	}
+	socketFD = socket (PF_INET, SOCK_STREAM, IPPROTO_TCP);
+	if (socketFD == -1)
+	{
+	    perror ("cannot create socket");
+	    exit (EXIT_FAILURE);
+	}
+
+	memset (&sa, 0, sizeof (sa));
+	sa.sin_family = AF_INET;
+	sa.sin_port = htons (port_num);
+
+	if (strcmp (address_arg, "*") == 0)
+	    sa.sin_addr.s_addr = htonl (INADDR_ANY);
+	else
+	    sa.sin_addr.s_addr = inet_addr (address_arg);
+
+	if (bind (socketFD, (struct sockaddr *)(&sa), sizeof (sa)) == -1)
+	{
+	    perror ("bind failed");
+	    exit (EXIT_FAILURE);
+	}
+
+	if (listen (socketFD, 10) == -1)
+	{
+	    perror ("listen failed");
+	    exit (EXIT_FAILURE);
+	}
+	FD_SET (socketFD, &master_fds);
+	maxfd = MAX (maxfd, socketFD);
+	record[iarg-2].port_num = port_num;
+	record[iarg-2].fd = socketFD;
     }
 
-    if (listen (SocketFD, 10) == -1)
-    {
-        perror ("listen failed");
-        close (SocketFD);
-        exit (EXIT_FAILURE);
-    }
-    printf ("%s Listening on TCP/IP port:socket %s:%d\n",
-        my_time(), address_arg, port_num);
-    fflush (stdout);
+    printf ("%s Listening on %d TCP/IP ports: address %s\n",
+        my_time(), num_ports, address_arg);
 
     for (con_num = 1 ; ; ++con_num)
     {
+	int index;
+        int connectFD;
+	int status;
 	struct sockaddr_in addr;
 	socklen_t addrlen = sizeof(addr);
-        int ConnectFD = accept (SocketFD, (struct sockaddr*)(&addr), &addrlen);
+	fd_set read_fds = master_fds;
 
-        if (0 > ConnectFD)
+	status = select (maxfd+1, &read_fds, NULL, NULL, NULL);
+	if (status < 0)
+	{
+	    perror ("select");
+	    continue;
+	}
+	socketFD = INVALID_SOCKET;
+	for (index = 0 ; index < num_ports ; ++index)
+	{
+	    if (FD_ISSET (record[index].fd, &read_fds))
+	    {
+	        socketFD = record[index].fd;
+		port_num = record[index].port_num;
+		break;
+	    }
+	}
+	if (socketFD == INVALID_SOCKET)
+	{
+	    fprintf (stderr, "%s: spurious connection\n", my_time());
+	    continue;
+	}
+
+        connectFD = accept (socketFD, (struct sockaddr*)(&addr), &addrlen);
+        if (0 > connectFD)
         {
             perror ("accept failed");
-            close (SocketFD);
             exit (EXIT_FAILURE);
         }
+	/* Debug code. Also tried getsockname(), socketFD.
+	{
+	    struct sockaddr_in local_sa;
+	    socklen_t local_length = sizeof (local_sa);
+	    if (getpeername (
+		connectFD, (struct sockaddr*)(&local_sa), &local_length)
+		== -1)
+	    {
+		perror ("getpeername failed");
+		exit (1);
+	    }
+	    printf ("Exper: %s\n", inet_ntoa (local_sa.sin_addr));
+	}
+	*/
 
-	process_connection (con_num, ConnectFD, &(addr.sin_addr));
+	process_connection (con_num, port_num, connectFD, &(addr.sin_addr));
     }
 
-    close (SocketFD);
     return EXIT_SUCCESS;
 }
