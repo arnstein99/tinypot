@@ -137,20 +137,6 @@ int main (int argc, char* argv[])
             perror ("accept failed");
             exit (EXIT_FAILURE);
         }
-	/* Debug code. Also tried getsockname(), socketFD.
-	{
-	    struct sockaddr_in local_sa;
-	    socklen_t local_length = sizeof (local_sa);
-	    if (getpeername (
-		connectFD, (struct sockaddr*)(&local_sa), &local_length)
-		== -1)
-	    {
-		perror ("getpeername failed");
-		exit (1);
-	    }
-	    printf ("Exper: %s\n", inet_ntoa (local_sa.sin_addr));
-	}
-	*/
 
 	process_connection (con_num, port_num, connectFD, &(addr.sin_addr));
     }
