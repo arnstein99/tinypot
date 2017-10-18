@@ -103,10 +103,7 @@ int main (int argc, char* argv[])
     for (con_num = 1 ; ; ++con_num)
     {
 	int index;
-        int connectFD;
 	int status;
-	struct sockaddr_in addr;
-	socklen_t addrlen = sizeof(addr);
 	fd_set read_fds = master_fds;
 
 	status = select (maxfd+1, &read_fds, NULL, NULL, NULL);
@@ -131,14 +128,7 @@ int main (int argc, char* argv[])
 	    continue;
 	}
 
-        connectFD = accept (socketFD, (struct sockaddr*)(&addr), &addrlen);
-        if (0 > connectFD)
-        {
-            perror ("accept failed");
-            exit (EXIT_FAILURE);
-        }
-
-	process_connection (con_num, port_num, connectFD, &(addr.sin_addr));
+	process_connection (con_num, port_num, socketFD);
     }
 
     return EXIT_SUCCESS;
