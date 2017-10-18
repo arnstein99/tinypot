@@ -20,7 +20,7 @@ Each portnum is a TCP/IP port number that will be opened for listening.
 
 To fish for Mirai bots, try this:
 ```
-$ tinypot - 23 2323 23231 6789
+$ tinypot - 23 2323 23231 6789 7547 587 23123 68 5060 1433 5555
 ```
 
 ## Comments
