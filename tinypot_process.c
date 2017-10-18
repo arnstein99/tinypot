@@ -12,23 +12,39 @@ struct Arg
     int con_num;
     int port_num;
     int socketFD;
+    int connectFD;
+    struct sockaddr_in addr;
 };
 
 static void* worker (void* arg);
 
 void process_connection (int con_num, int port_num, int socketFD)
 {
+    int connectFD;
     pthread_t thread_handle;
+    struct sockaddr_in addr;
+    socklen_t addrlen = sizeof(addr);
     struct Arg* parg;
 
-    if ((parg = (void*)malloc (sizeof (struct Arg))) == NULL)
+    if ((parg = (struct Arg*)malloc (sizeof (struct Arg))) == NULL)
     {
         perror ("malloc failed");
 	return;
     }
+
+    connectFD = accept (socketFD, (struct sockaddr*)(&addr), &addrlen);
+    if (0 > connectFD)
+    {
+	perror ("accept failed");
+	free ((void*)parg);
+	return;
+    }
+
     parg->con_num = con_num;
     parg->port_num = port_num;
     parg->socketFD = socketFD;
+    parg->connectFD = connectFD;
+    parg->addr = addr;
 
     if (pthread_create (&thread_handle, NULL, worker, (void*)parg) != 0)
     {
@@ -41,36 +57,26 @@ void process_connection (int con_num, int port_num, int socketFD)
 static void* worker (void* arg)
 {
     char chr;
-    int connectFD;
     FILE* writeFD;
     struct sockaddr_in local_sa;
     socklen_t local_length = sizeof (local_sa);
-    struct sockaddr_in addr;
-    socklen_t addrlen = sizeof(addr);
     struct Arg* parg = (struct Arg*)arg;
     int printing = 0;
     int iline = 0;
 
-    connectFD = accept (parg->socketFD, (struct sockaddr*)(&addr), &addrlen);
-    if (0 > connectFD)
-    {
-	perror ("accept failed");
-	free ((void*)parg);
-	pthread_exit (NULL);
-    }
     if (getsockname (
-	connectFD, (struct sockaddr*)(&local_sa), &local_length) == -1)
+	parg->connectFD, (struct sockaddr*)(&local_sa), &local_length) == -1)
     {
 	perror ("getsockname failed");
-	close (connectFD);
+	close (parg->connectFD);
 	free ((void*)parg);
 	pthread_exit (NULL);
     }
 
-    if ((writeFD = fdopen (connectFD, "w")) == NULL)
+    if ((writeFD = fdopen (parg->connectFD, "w")) == NULL)
     {
         perror ("fdopen failed");
-	close (connectFD);
+	close (parg->connectFD);
 	free ((void*)parg);
 	pthread_exit (NULL);
     }
@@ -78,16 +84,16 @@ static void* worker (void* arg)
     fprintf (writeFD, "login: ");
     fflush (writeFD);
     printf ("%s open connection %s -> ",
-        my_time(), inet_ntoa (addr.sin_addr));
-    printf ("%s:%d    #%d\n",
+        my_time(), inet_ntoa (parg->addr.sin_addr));
+    printf ("%s:%d    # %d\n",
 	inet_ntoa (local_sa.sin_addr), parg->port_num,
 	parg->con_num);
     fflush (stdout);
-    while (read (connectFD, &chr, 1) != 0)
+    while (read (parg->connectFD, &chr, 1) != 0)
     {
     	if (!printing)
 	{
-	    printf ("%s #%d: ", my_time(), parg->con_num);
+	    printf ("%s # %d: ", my_time(), parg->con_num);
 	    fflush (stdout);
 	    printing = 1;
 	}
@@ -108,19 +114,19 @@ static void* worker (void* arg)
     }
     if (printing)
         printf ("\n(Missing newline)\n");
-    printf ("%s close connection #%d\n", my_time(), parg->con_num);
+    printf ("%s close connection # %d\n", my_time(), parg->con_num);
     fflush (stdout);
 
-    if (shutdown (connectFD, SHUT_RDWR) == -1)
+    if (shutdown (parg->connectFD, SHUT_RDWR) == -1)
     {
         perror ("shutdown failed");
 	fclose (writeFD);
-        close (connectFD);
+        close (parg->connectFD);
 	free ((void*)parg);
 	pthread_exit (NULL);
     }
     fclose (writeFD);
-    close (connectFD);
+    close (parg->connectFD);
     free ((void*)parg);
     pthread_exit (NULL);
 }
