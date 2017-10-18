@@ -2,6 +2,7 @@
 #include <unistd.h>
 #include <stdio.h>
 #include <pthread.h>
+#include <sys/types.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
 #include <time.h>
@@ -139,6 +140,7 @@ char* my_time (void)
     if ((tt = time (NULL)) == -1)
     {
 	perror ("time failed");
+	fflush (stderr);
 	pthread_exit (NULL);
     }
     tm = *localtime (&tt);

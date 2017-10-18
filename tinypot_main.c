@@ -3,6 +3,7 @@
 #include <sys/select.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -54,6 +55,13 @@ int main (int argc, char* argv[])
         perror ("malloc");
 	exit (EXIT_FAILURE);
     }
+
+    if (signal (SIGPIPE, SIG_IGN) == SIG_ERR)
+    {
+        perror ("signal failed");
+	exit (EXIT_FAILURE);
+    }
+
     FD_ZERO (&master_fds);
     for (iarg = 2 ; iarg < argc ; ++iarg)
     {
