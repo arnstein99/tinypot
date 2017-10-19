@@ -84,11 +84,10 @@ static void* worker (void* arg)
 
     fprintf (writeFD, "login: ");
     fflush (writeFD);
-    printf ("%s open connection %s -> ",
-        my_time(), inet_ntoa (parg->addr.sin_addr));
-    printf ("%s:%d    # %d\n",
-	inet_ntoa (local_sa.sin_addr), parg->port_num,
-	parg->con_num);
+    printf ("%s # %d open connection %s -> ",
+        my_time(), parg->con_num, inet_ntoa (parg->addr.sin_addr));
+    printf ("%s:%d\n",
+	inet_ntoa (local_sa.sin_addr), parg->port_num);
     fflush (stdout);
     while (read (parg->connectFD, &chr, 1) != 0)
     {
@@ -114,8 +113,8 @@ static void* worker (void* arg)
 	}
     }
     if (printing)
-        printf ("\n(Missing newline)\n");
-    printf ("%s close connection # %d\n", my_time(), parg->con_num);
+        printf ("\n%s # %d (Missing newline)\n", my_time(), parg->con_num);
+    printf ("%s # %d close connection\n", my_time(), parg->con_num);
     fflush (stdout);
 
     if (shutdown (parg->connectFD, SHUT_RDWR) == -1)
@@ -140,7 +139,6 @@ char* my_time (void)
     if ((tt = time (NULL)) == -1)
     {
 	perror ("time failed");
-	fflush (stderr);
 	pthread_exit (NULL);
     }
     tm = *localtime (&tt);
