@@ -18,6 +18,7 @@ struct Arg
 };
 
 static void* worker (void* arg);
+static void timestamp (int con_num, int colon);
 
 void process_connection (int con_num, int port_num, int socketFD)
 {
@@ -84,8 +85,8 @@ static void* worker (void* arg)
 
     fprintf (writeFD, "login: ");
     fflush (writeFD);
-    printf ("%s # %d open connection %s -> ",
-        my_time(), parg->con_num, inet_ntoa (parg->addr.sin_addr));
+    timestamp (parg->con_num, 0);
+    printf ("open connection %s -> ", inet_ntoa (parg->addr.sin_addr));
     printf ("%s:%d\n",
 	inet_ntoa (local_sa.sin_addr), parg->port_num);
     fflush (stdout);
@@ -93,7 +94,7 @@ static void* worker (void* arg)
     {
     	if (!printing)
 	{
-	    printf ("%s # %d: ", my_time(), parg->con_num);
+	    timestamp (parg->con_num, 1);
 	    fflush (stdout);
 	    printing = 1;
 	}
@@ -113,8 +114,13 @@ static void* worker (void* arg)
 	}
     }
     if (printing)
-        printf ("\n%s # %d (Missing newline)\n", my_time(), parg->con_num);
-    printf ("%s # %d close connection\n", my_time(), parg->con_num);
+    {
+	printf ("\n");
+	timestamp (parg->con_num, 0);
+        printf ("(Missing newline)\n");
+    }
+    timestamp (parg->con_num, 0);
+    printf ("close connection\n");
     fflush (stdout);
 
     if (shutdown (parg->connectFD, SHUT_RDWR) == -1)
@@ -146,4 +152,10 @@ char* my_time (void)
         tm.tm_year+1900, tm.tm_mon+1, tm.tm_mday,
 	tm.tm_hour, tm.tm_min, tm.tm_sec);
     return &buf[0];
+}
+
+static void timestamp (int con_num, int colon)
+{
+    printf ("%s #%d", my_time(), con_num);
+    printf ("%s", (colon ? ": " : "  "));
 }
