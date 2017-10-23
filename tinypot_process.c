@@ -25,11 +25,12 @@ void process_connection (int con_num, int port_num, int socketFD)
     int connectFD;
     pthread_t thread_handle;
     struct sockaddr_in addr;
-    socklen_t addrlen = sizeof(addr);
+    socklen_t addrlen = (socklen_t)sizeof(addr);
     struct Arg* parg;
 
     if ((parg = (struct Arg*)malloc (sizeof (struct Arg))) == NULL)
     {
+	timestamp (parg->con_num, 0);
         perror ("malloc failed");
 	return;
     }
@@ -37,6 +38,7 @@ void process_connection (int con_num, int port_num, int socketFD)
     connectFD = accept (socketFD, (struct sockaddr*)(&addr), &addrlen);
     if (0 > connectFD)
     {
+	timestamp (parg->con_num, 0);
 	perror ("accept failed");
 	free ((void*)parg);
 	return;
@@ -50,6 +52,7 @@ void process_connection (int con_num, int port_num, int socketFD)
 
     if (pthread_create (&thread_handle, NULL, worker, (void*)parg) != 0)
     {
+	timestamp (parg->con_num, 0);
         perror ("pthread_create failed");
 	free ((void*)parg);
 	return;
@@ -61,7 +64,7 @@ static void* worker (void* arg)
     char chr;
     FILE* writeFD;
     struct sockaddr_in local_sa;
-    socklen_t local_length = sizeof (local_sa);
+    socklen_t local_length = (socklen_t)sizeof (local_sa);
     struct Arg* parg = (struct Arg*)arg;
     int printing = 0;
     int iline = 0;
@@ -69,6 +72,7 @@ static void* worker (void* arg)
     if (getsockname (
 	parg->connectFD, (struct sockaddr*)(&local_sa), &local_length) == -1)
     {
+	timestamp (parg->con_num, 0);
 	perror ("getsockname failed");
 	close (parg->connectFD);
 	free ((void*)parg);
@@ -77,6 +81,7 @@ static void* worker (void* arg)
 
     if ((writeFD = fdopen (parg->connectFD, "w")) == NULL)
     {
+	timestamp (parg->con_num, 0);
         perror ("fdopen failed");
 	close (parg->connectFD);
 	free ((void*)parg);
@@ -125,6 +130,7 @@ static void* worker (void* arg)
 
     if (shutdown (parg->connectFD, SHUT_RDWR) == -1)
     {
+	timestamp (parg->con_num, 0);
         perror ("shutdown failed");
 	fclose (writeFD);
         close (parg->connectFD);
@@ -148,7 +154,7 @@ char* my_time (void)
 	pthread_exit (NULL);
     }
     tm = *localtime (&tt);
-    sprintf (buf, "%04d/%02d/%02d %02d:%02d:%02d",
+    snprintf (buf, sizeof(buf), "%04d/%02d/%02d %02d:%02d:%02d",
         tm.tm_year+1900, tm.tm_mon+1, tm.tm_mday,
 	tm.tm_hour, tm.tm_min, tm.tm_sec);
     return &buf[0];

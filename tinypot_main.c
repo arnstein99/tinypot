@@ -33,12 +33,13 @@ int main (int argc, char* argv[])
     int num_ports;
     int maxfd = -1;
 
+    address_arg = "";
     switch (argc)
     {
     case 1:
     case 2:
         fprintf (stderr, "Usage: tinypot [address|-] portnum portnum ...\n");
-	exit (1);
+	exit (EXIT_FAILURE);
         break;
     default:
         address_arg = argv[1];
@@ -61,6 +62,11 @@ int main (int argc, char* argv[])
         perror ("signal failed");
 	exit (EXIT_FAILURE);
     }
+    if (signal (SIGTRAP, SIG_IGN) == SIG_ERR)
+    {
+        perror ("signal failed");
+	exit (EXIT_FAILURE);
+    }
 
     FD_ZERO (&master_fds);
     for (iarg = 2 ; iarg < argc ; ++iarg)
@@ -70,7 +76,7 @@ int main (int argc, char* argv[])
 	if (sscanf (port_arg, "%d", &port_num) != 1)
 	{
 	    fprintf (stderr, "Illegal numeric expression \"%s\"\n", port_arg);
-	    exit (1);
+	    exit (EXIT_FAILURE);
 	}
 	socketFD = socket (PF_INET, SOCK_STREAM, IPPROTO_TCP);
 	if (socketFD == -1)
@@ -81,15 +87,17 @@ int main (int argc, char* argv[])
 
 	memset (&sa, 0, sizeof (sa));
 	sa.sin_family = AF_INET;
-	sa.sin_port = htons (port_num);
+	sa.sin_port = htons ((uint16_t)port_num);
 
 	if (strcmp (address_arg, "*") == 0)
 	    sa.sin_addr.s_addr = htonl (INADDR_ANY);
 	else
 	    sa.sin_addr.s_addr = inet_addr (address_arg);
 
-	if (bind (socketFD, (struct sockaddr *)(&sa), sizeof (sa)) == -1)
+	if (bind (socketFD, (struct sockaddr *)(&sa), (socklen_t)sizeof (sa))
+	    == -1)
 	{
+	    fprintf (stderr, "On port %d, ", port_num);
 	    perror ("bind failed");
 	    exit (EXIT_FAILURE);
 	}
