@@ -8,6 +8,10 @@
 #include <time.h>
 #include "tinypot_process.h"
 
+/* The following constant will be multiplied by a million, so don't let it get
+ * much larger than 2000. */
+#define MY_MAX 8 /* seconds */
+
 struct Arg
 {
     int con_num;
@@ -18,7 +22,8 @@ struct Arg
 };
 
 static void* worker (void* arg);
-static void timestamp (int con_num, int colon);
+static void timestamp (FILE* fd, int con_num, int colon);
+static void my_sleep (void);
 
 void process_connection (int con_num, int port_num, int socketFD)
 {
@@ -30,7 +35,7 @@ void process_connection (int con_num, int port_num, int socketFD)
 
     if ((parg = (struct Arg*)malloc (sizeof (struct Arg))) == NULL)
     {
-	timestamp (parg->con_num, 0);
+	timestamp (stderr, parg->con_num, 0);
         perror ("malloc failed");
 	return;
     }
@@ -38,7 +43,7 @@ void process_connection (int con_num, int port_num, int socketFD)
     connectFD = accept (socketFD, (struct sockaddr*)(&addr), &addrlen);
     if (0 > connectFD)
     {
-	timestamp (parg->con_num, 0);
+	timestamp (stderr, parg->con_num, 0);
 	perror ("accept failed");
 	free ((void*)parg);
 	return;
@@ -52,7 +57,7 @@ void process_connection (int con_num, int port_num, int socketFD)
 
     if (pthread_create (&thread_handle, NULL, worker, (void*)parg) != 0)
     {
-	timestamp (parg->con_num, 0);
+	timestamp (stderr, parg->con_num, 0);
         perror ("pthread_create failed");
 	free ((void*)parg);
 	return;
@@ -72,7 +77,7 @@ static void* worker (void* arg)
     if (getsockname (
 	parg->connectFD, (struct sockaddr*)(&local_sa), &local_length) == -1)
     {
-	timestamp (parg->con_num, 0);
+	timestamp (stderr, parg->con_num, 0);
 	perror ("getsockname failed");
 	close (parg->connectFD);
 	free ((void*)parg);
@@ -81,7 +86,7 @@ static void* worker (void* arg)
 
     if ((writeFD = fdopen (parg->connectFD, "w")) == NULL)
     {
-	timestamp (parg->con_num, 0);
+	timestamp (stderr, parg->con_num, 0);
         perror ("fdopen failed");
 	close (parg->connectFD);
 	free ((void*)parg);
@@ -90,7 +95,7 @@ static void* worker (void* arg)
 
     fprintf (writeFD, "login: ");
     fflush (writeFD);
-    timestamp (parg->con_num, 0);
+    timestamp (stdout, parg->con_num, 0);
     printf ("open connection %s -> ", inet_ntoa (parg->addr.sin_addr));
     printf ("%s:%d\n",
 	inet_ntoa (local_sa.sin_addr), parg->port_num);
@@ -99,7 +104,7 @@ static void* worker (void* arg)
     {
     	if (!printing)
 	{
-	    timestamp (parg->con_num, 1);
+	    timestamp (stdout, parg->con_num, 1);
 	    fflush (stdout);
 	    printing = 1;
 	}
@@ -108,12 +113,12 @@ static void* worker (void* arg)
 	putchar (chr);
 	if (chr == '\n')
 	{
-	    fflush (writeFD);
 	    if (iline == 0)
 	        fprintf (writeFD, "Password:");
 	    else
 	        fprintf (writeFD, "$ ");
 	    fflush (writeFD);
+	    my_sleep();
 	    ++iline;
 	    printing = 0;
 	}
@@ -121,16 +126,17 @@ static void* worker (void* arg)
     if (printing)
     {
 	printf ("\n");
-	timestamp (parg->con_num, 0);
+	timestamp (stdout, parg->con_num, 0);
         printf ("(Missing newline)\n");
+	fflush (stdout);
     }
-    timestamp (parg->con_num, 0);
+    timestamp (stdout, parg->con_num, 0);
     printf ("close connection\n");
     fflush (stdout);
 
     if (shutdown (parg->connectFD, SHUT_RDWR) == -1)
     {
-	timestamp (parg->con_num, 0);
+	timestamp (stderr, parg->con_num, 0);
         perror ("shutdown failed");
 	fclose (writeFD);
         close (parg->connectFD);
@@ -141,6 +147,12 @@ static void* worker (void* arg)
     close (parg->connectFD);
     free ((void*)parg);
     pthread_exit (NULL);
+}
+
+static void timestamp (FILE* fd, int con_num, int colon)
+{
+    fprintf (fd, "%s #%d", my_time(), con_num);
+    fprintf (fd, "%s", (colon ? ": " : "  "));
 }
 
 char* my_time (void)
@@ -160,8 +172,15 @@ char* my_time (void)
     return &buf[0];
 }
 
-static void timestamp (int con_num, int colon)
+static void my_sleep (void)
 {
-    printf ("%s #%d", my_time(), con_num);
-    printf ("%s", (colon ? ": " : "  "));
+    static const double my_scale = (double)MY_MAX * 1000000 / RAND_MAX;
+    unsigned int sleep_time = rand();
+    sleep_time = (unsigned int)(my_scale * sleep_time);  /* seconds */
+    while (sleep_time >= 500000)
+    {
+	usleep (500000);
+	sleep_time -= 500000;
+    }
+    usleep (sleep_time);
 }

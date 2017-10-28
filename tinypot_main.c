@@ -26,6 +26,7 @@ int main (int argc, char* argv[])
     fd_set master_fds;
     int socketFD;
     int port_num;
+    int index;
     char* address_arg;
     int con_num;
     int iarg;
@@ -53,7 +54,7 @@ int main (int argc, char* argv[])
     num_ports = argc - 2;
     if ((record = (Record*)malloc (num_ports * sizeof (Record))) == NULL)
     {
-        perror ("malloc");
+        perror ("malloc failed");
 	exit (EXIT_FAILURE);
     }
 
@@ -115,17 +116,21 @@ int main (int argc, char* argv[])
 
     printf ("%s Listening on %d TCP/IP ports: address %s\n",
         my_time(), num_ports, address_arg);
+    printf ("    ");
+    for (index = 0 ; index < num_ports ; ++index)
+        printf (" %d", record[index].port_num);
+    printf ("\n");
+    fflush (stdout);
 
     for (con_num = 1 ; ; ++con_num)
     {
-	int index;
 	int status;
 	fd_set read_fds = master_fds;
 
 	status = select (maxfd+1, &read_fds, NULL, NULL, NULL);
 	if (status < 0)
 	{
-	    perror ("select");
+	    perror ("select failed");
 	    continue;
 	}
 	socketFD = INVALID_SOCKET;
@@ -141,6 +146,7 @@ int main (int argc, char* argv[])
 	if (socketFD == INVALID_SOCKET)
 	{
 	    fprintf (stderr, "%s: spurious connection\n", my_time());
+	    fflush (stderr);
 	    continue;
 	}
 
