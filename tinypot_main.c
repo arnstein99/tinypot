@@ -150,7 +150,8 @@ int main (int argc, char* argv[])
 	    continue;
 	}
 
-	process_connection (con_num, port_num, socketFD);
+	if (process_connection (con_num, port_num, socketFD) != 0)
+	    break;
     }
 
     return EXIT_SUCCESS;

@@ -6,11 +6,12 @@
 #include <sys/socket.h>
 #include <arpa/inet.h>
 #include <time.h>
+#include <errno.h>
 #include "tinypot_process.h"
 
 /* The following constant will be multiplied by a million, so don't let it get
  * much larger than 2000. */
-#define MY_MAX 8 /* seconds */
+#define MY_MAX 10 /* seconds */
 
 struct Arg
 {
@@ -25,7 +26,7 @@ static void* worker (void* arg);
 static void timestamp (FILE* fd, int con_num, int colon);
 static void my_sleep (void);
 
-void process_connection (int con_num, int port_num, int socketFD)
+int process_connection (int con_num, int port_num, int socketFD)
 {
     int connectFD;
     pthread_t thread_handle;
@@ -37,7 +38,7 @@ void process_connection (int con_num, int port_num, int socketFD)
     {
 	timestamp (stderr, parg->con_num, 0);
         perror ("malloc failed");
-	return;
+	return 1;
     }
 
     connectFD = accept (socketFD, (struct sockaddr*)(&addr), &addrlen);
@@ -46,7 +47,8 @@ void process_connection (int con_num, int port_num, int socketFD)
 	timestamp (stderr, parg->con_num, 0);
 	perror ("accept failed");
 	free ((void*)parg);
-	return;
+	if (errno == EMFILE) return 1;
+	return 0;
     }
 
     parg->con_num = con_num;
@@ -60,8 +62,9 @@ void process_connection (int con_num, int port_num, int socketFD)
 	timestamp (stderr, parg->con_num, 0);
         perror ("pthread_create failed");
 	free ((void*)parg);
-	return;
+	return 1;
     }
+    return 0;
 }
 
 static void* worker (void* arg)
@@ -100,6 +103,7 @@ static void* worker (void* arg)
     printf ("%s:%d\n",
 	inet_ntoa (local_sa.sin_addr), parg->port_num);
     fflush (stdout);
+    my_sleep();
     while (read (parg->connectFD, &chr, 1) != 0)
     {
     	if (!printing)
