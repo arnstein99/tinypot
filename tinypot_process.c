@@ -7,6 +7,7 @@
 #include <arpa/inet.h>
 #include <time.h>
 #include <errno.h>
+#include <termios.h>
 #include "tinypot_process.h"
 
 /* The following constant will be multiplied by a million, so don't let it get
@@ -64,6 +65,12 @@ int process_connection (int con_num, int port_num, int socketFD)
 	free ((void*)parg);
 	return 1;
     }
+    if (pthread_detach (thread_handle) != 0)
+    {
+        perror ("pthread_detach failed");
+	free ((void*)parg);
+	return 1;
+    }
     return 0;
 }
 
@@ -118,10 +125,20 @@ static void* worker (void* arg)
 	if (chr == '\n')
 	{
 	    if (iline == 0)
+	    {
 	        fprintf (writeFD, "Password:");
-	    else
+		fflush (writeFD);
+	    }
+	    else if (iline == 1)
+	    {
 	        fprintf (writeFD, "$ ");
-	    fflush (writeFD);
+		fflush (writeFD);
+	    }
+	    else
+	    {
+	        fprintf (writeFD, "$ ");
+		fflush (writeFD);
+	    }
 	    my_sleep();
 	    ++iline;
 	    printing = 0;
