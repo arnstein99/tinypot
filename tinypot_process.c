@@ -7,7 +7,6 @@
 #include <arpa/inet.h>
 #include <time.h>
 #include <errno.h>
-#include <termios.h>
 #include "tinypot_process.h"
 
 /* The following constant will be multiplied by a million, so don't let it get
