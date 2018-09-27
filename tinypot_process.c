@@ -28,11 +28,21 @@ static void my_sleep (void);
 
 int process_connection (int con_num, int port_num, int socketFD)
 {
+    int optval;
     int connectFD;
     pthread_t thread_handle;
     struct sockaddr_in addr;
     socklen_t addrlen = (socklen_t)sizeof(addr);
     struct Arg* parg;
+
+    optval = 1;
+    if (setsockopt (
+	socketFD, SOL_SOCKET, SO_KEEPALIVE, &optval, sizeof(optval))
+	< 0)
+    {
+	perror("cannot set keepalive");
+	exit (EXIT_FAILURE);
+    }
 
     if ((parg = (struct Arg*)malloc (sizeof (struct Arg))) == NULL)
     {
@@ -128,6 +138,7 @@ static void* worker (void* arg)
 	        fprintf (writeFD, "Password:");
 		fflush (writeFD);
 	    }
+	    /* TODO: delete this clause */
 	    else if (iline == 1)
 	    {
 	        fprintf (writeFD, "$ ");
