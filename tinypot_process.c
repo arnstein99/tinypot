@@ -117,6 +117,7 @@ static void* worker (void* arg)
 	pthread_exit (NULL);
     }
 
+    my_sleep();
     fprintf (writeFD, "login: ");
     fflush (writeFD);
     timestamp (stdout, parg->con_num, 0);
@@ -125,7 +126,6 @@ static void* worker (void* arg)
 	inet_ntoa (local_sa.sin_addr), parg->port_num);
     fflush (stdout);
     printing = 0;
-    my_sleep();
     while ((retval = read (parg->connectFD, &chr, 1)) > 0)
     {
     	if (printing == 0)
@@ -139,6 +139,7 @@ static void* worker (void* arg)
 	putchar (chr);
 	if (chr == '\n')
 	{
+	    my_sleep();
 	    if (iline == 0)
 	    {
 	        fprintf (writeFD, "Password:");
@@ -156,7 +157,6 @@ static void* worker (void* arg)
 	    fflush (stdout);
 	    ++iline;
 	    printing = 0;
-	    my_sleep();
 	}
 	else
 	{
