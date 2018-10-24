@@ -1,3 +1,8 @@
+/*
+    Tuning
+ */
+static const char* version = "1.1";
+
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/select.h>
@@ -33,6 +38,8 @@ int main (int argc, char* argv[])
     Record* record;
     int num_ports;
     int maxfd = -1;
+
+    printf ("Program tinypot version %s\n", version);
 
     address_arg = "";
     switch (argc)
@@ -114,8 +121,8 @@ int main (int argc, char* argv[])
 	record[iarg-2].fd = socketFD;
     }
 
-    printf ("%s Listening on %d TCP/IP ports: address %s\n",
-        my_time(), num_ports, address_arg);
+    printf ("%s Listening on address %s, %d TCP/IP ports:\n",
+        my_time(), address_arg, num_ports);
     printf ("    ");
     for (index = 0 ; index < num_ports ; ++index)
         printf (" %d", record[index].port_num);
