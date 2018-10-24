@@ -86,11 +86,16 @@ int process_connection (int con_num, int port_num, int socketFD)
 static void* worker (void* arg)
 {
     char chr;
+    int retval;
     FILE* writeFD;
     struct sockaddr_in local_sa;
     socklen_t local_length = (socklen_t)sizeof (local_sa);
     struct Arg* parg = (struct Arg*)arg;
-    int printing = 0;
+    int printing = 0;    /* 2 if a \n, time stamp, and char(s) have been sent,
+                          * 1 if a \n, time stamp have been sent,
+			  * 0 if a \n has been sent.
+			  * NO OTHER CONDITIONS ALLOWED.
+			  */
     int iline = 0;
 
     if (getsockname (
@@ -119,10 +124,11 @@ static void* worker (void* arg)
     printf ("%s:%d\n",
 	inet_ntoa (local_sa.sin_addr), parg->port_num);
     fflush (stdout);
+    printing = 0;
     my_sleep();
-    while (read (parg->connectFD, &chr, 1) != 0)
+    while ((retval = read (parg->connectFD, &chr, 1)) > 0)
     {
-    	if (!printing)
+    	if (printing == 0)
 	{
 	    timestamp (stdout, parg->con_num, 1);
 	    fflush (stdout);
@@ -136,44 +142,51 @@ static void* worker (void* arg)
 	    if (iline == 0)
 	    {
 	        fprintf (writeFD, "Password:");
-		fflush (writeFD);
 	    }
 	    /* TODO: delete this clause */
 	    else if (iline == 1)
 	    {
 	        fprintf (writeFD, "$ ");
-		fflush (writeFD);
 	    }
 	    else
 	    {
 	        fprintf (writeFD, "$ ");
-		fflush (writeFD);
 	    }
-	    my_sleep();
+	    fflush (writeFD);
+	    fflush (stdout);
 	    ++iline;
 	    printing = 0;
+	    my_sleep();
+	}
+	else
+	{
+	    printing = 2;
 	}
     }
-    if (printing)
+    if (printing == 2)
     {
 	printf ("\n");
 	timestamp (stdout, parg->con_num, 0);
         printf ("(Missing newline)\n");
-	fflush (stdout);
+	printing = 0;
     }
-    timestamp (stdout, parg->con_num, 0);
-    printf ("close connection\n");
-    fflush (stdout);
-
-    if (shutdown (parg->connectFD, SHUT_RDWR) == -1)
+    if (printing == 0)
     {
-	timestamp (stderr, parg->con_num, 0);
-        perror ("shutdown failed");
-	fclose (writeFD);
-        close (parg->connectFD);
-	free ((void*)parg);
-	pthread_exit (NULL);
+	timestamp (stdout, parg->con_num, 0);
+	printing = 1;
     }
+    fflush (stdout);
+    if (retval == -1)
+	perror ("close connection");
+    else
+	fprintf (stderr, "close connection: end of file\n");
+    fflush (stderr);
+    printing = 0;
+
+    /* This fails so often with "endpoint is not connected" that it is not
+     * interesting */
+    shutdown (parg->connectFD, SHUT_RDWR);
+
     fclose (writeFD);
     close (parg->connectFD);
     free ((void*)parg);
@@ -183,7 +196,7 @@ static void* worker (void* arg)
 static void timestamp (FILE* fd, int con_num, int colon)
 {
     fprintf (fd, "%s #%d", my_time(), con_num);
-    fprintf (fd, "%s", (colon ? ": " : "  "));
+    fprintf (fd, "%s ", (colon ? ":" : " "));
 }
 
 char* my_time (void)
