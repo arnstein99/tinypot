@@ -25,6 +25,9 @@ struct Arg
 static void* worker (void* arg);
 static void timestamp (FILE* fd, int con_num, int colon);
 static void my_sleep (void);
+static int timed_read (int d, void* buf, size_t nbyte, unsigned int seconds);
+
+static pthread_mutex_t print_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 int process_connection (int con_num, int port_num, int socketFD)
 {
@@ -97,6 +100,7 @@ static void* worker (void* arg)
 			  * NO OTHER CONDITIONS ALLOWED.
 			  */
     int iline = 0;
+    int finished;
 
     if (getsockname (
 	parg->connectFD, (struct sockaddr*)(&local_sa), &local_length) == -1)
@@ -120,16 +124,72 @@ static void* worker (void* arg)
     my_sleep();
     fprintf (writeFD, "login: ");
     fflush (writeFD);
+    pthread_mutex_lock (&print_mutex);
     timestamp (stdout, parg->con_num, 0);
     printf ("open connection %s -> ", inet_ntoa (parg->addr.sin_addr));
     printf ("%s:%d\n",
 	inet_ntoa (local_sa.sin_addr), parg->port_num);
     fflush (stdout);
+    pthread_mutex_unlock (&print_mutex);
     printing = 0;
-    while ((retval = read (parg->connectFD, &chr, 1)) > 0)
+    finished = 0;
+    while (1)
     {
+	retval = timed_read (parg->connectFD, &chr, 1, 30);
+	switch (retval)
+	{
+	case 0:
+	    /* Got no character */
+	    finished = 1;
+	    break;
+	case 1:
+	    /* Got a character, keep going */
+	    break;
+	case -1:
+	    /* Read error */
+	    finished = 1;
+	    break;
+	case -2:
+	    /* timeout */
+	    switch (printing)
+	    {
+	    case 0:
+		/* Mutex already unlocked, nothing to do. */
+	        break;
+	    case 1:
+	        /* Mutex has been locked and a timestamp has been printed */
+		printf("(tinypot_wait)\n");
+		fflush (stdout);
+		pthread_mutex_unlock (&print_mutex);
+	        break;
+	    case 2:
+		/* Mutex has been locked and some characters have been echoed */
+		printf ("\n");
+		timestamp (stdout, parg->con_num, 0);
+		printf("(tinypot_wait)\n");
+		fflush (stdout);
+		pthread_mutex_unlock (&print_mutex);
+	        break;
+	    default:
+		fprintf(stderr, "Programming error, printing.\n");
+		fflush(stderr);
+		finished = 1;
+	        break;
+	    }
+	    printing = 0;
+	    continue;
+	    break;
+	default:
+	    fprintf(stderr, "Programming error, read.\n");
+	    fflush(stderr);
+	    finished = 1;
+	    break;
+	}
+	if (finished) break;
+
     	if (printing == 0)
 	{
+	    pthread_mutex_lock (&print_mutex);
 	    timestamp (stdout, parg->con_num, 1);
 	    fflush (stdout);
 	    printing = 1;
@@ -139,7 +199,8 @@ static void* worker (void* arg)
 	putchar (chr);
 	if (chr == '\n')
 	{
-	    my_sleep();
+	    fflush (stdout);
+	    pthread_mutex_unlock (&print_mutex);
 	    if (iline == 0)
 	    {
 	        fprintf (writeFD, "Password:");
@@ -153,9 +214,9 @@ static void* worker (void* arg)
 	    {
 	        fprintf (writeFD, "$ ");
 	    }
-	    fflush (writeFD);
-	    fflush (stdout);
 	    ++iline;
+	    my_sleep();
+	    fflush (writeFD);
 	    printing = 0;
 	}
 	else
@@ -168,10 +229,12 @@ static void* worker (void* arg)
 	printf ("\n");
 	timestamp (stdout, parg->con_num, 0);
         printf ("(Missing newline)\n");
+	pthread_mutex_unlock (&print_mutex);
 	printing = 0;
     }
     if (printing == 0)
     {
+	pthread_mutex_lock (&print_mutex);
 	timestamp (stdout, parg->con_num, 0);
 	printing = 1;
     }
@@ -181,6 +244,7 @@ static void* worker (void* arg)
     else
 	fprintf (stderr, "close connection: end of file\n");
     fflush (stderr);
+    pthread_mutex_unlock (&print_mutex);
     printing = 0;
 
     /* This fails so often with "endpoint is not connected" that it is not
@@ -227,4 +291,33 @@ static void my_sleep (void)
 	sleep_time -= 500000;
     }
     usleep (sleep_time);
+}
+
+static int timed_read (int d, void* buf, size_t nbyte, unsigned int seconds)
+{
+    struct timeval wait;
+    fd_set read_fds;
+    int status;
+    int retval;
+
+    wait.tv_sec = seconds;
+    wait.tv_usec = 0;
+    FD_ZERO (&read_fds);
+    FD_SET (d, &read_fds);
+    status = select (d+1, &read_fds, NULL, NULL, &wait);
+    switch (status)
+    {
+    case 0:
+        /* timeout */
+	retval = -2;
+        break;
+    case 1:
+        /* A character is available */
+	retval = read(d, buf, nbyte);
+        break;
+    default:
+        retval = -3;
+        break;
+    }
+    return retval;
 }
