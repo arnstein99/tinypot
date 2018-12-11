@@ -70,6 +70,9 @@ int process_connection (int con_num, int port_num, int socketFD)
     parg->connectFD = connectFD;
     parg->addr = addr;
 
+    /* Keep con_num in order on stdout */
+    my_sleep();
+
     if (pthread_create (&thread_handle, NULL, worker, (void*)parg) != 0)
     {
 	timestamp (stderr, parg->con_num, 0);
@@ -83,6 +86,7 @@ int process_connection (int con_num, int port_num, int socketFD)
 	free ((void*)parg);
 	return 1;
     }
+
     return 0;
 }
 
@@ -102,6 +106,9 @@ static void* worker (void* arg)
     int iline = 0;
     int finished;
 
+    /* Lock mutex early to keep connection numbers (con_num) in order. */
+    pthread_mutex_lock (&print_mutex);
+
     if (getsockname (
 	parg->connectFD, (struct sockaddr*)(&local_sa), &local_length) == -1)
     {
@@ -109,6 +116,7 @@ static void* worker (void* arg)
 	perror ("getsockname failed");
 	close (parg->connectFD);
 	free ((void*)parg);
+	pthread_mutex_unlock (&print_mutex);
 	pthread_exit (NULL);
     }
 
@@ -118,13 +126,12 @@ static void* worker (void* arg)
         perror ("fdopen failed");
 	close (parg->connectFD);
 	free ((void*)parg);
+	pthread_mutex_unlock (&print_mutex);
 	pthread_exit (NULL);
     }
 
-    my_sleep();
     fprintf (writeFD, "login: ");
     fflush (writeFD);
-    pthread_mutex_lock (&print_mutex);
     timestamp (stdout, parg->con_num, 0);
     printf ("open connection %s -> ", inet_ntoa (parg->addr.sin_addr));
     printf ("%s:%d\n",
@@ -133,6 +140,8 @@ static void* worker (void* arg)
     pthread_mutex_unlock (&print_mutex);
     printing = 0;
     finished = 0;
+
+    /* Loop over incoming characters */
     while (1)
     {
 	retval = timed_read (parg->connectFD, &chr, 1, 30);
@@ -166,9 +175,10 @@ static void* worker (void* arg)
 		/* Mutex has been locked and some characters have been echoed */
 		printf ("\n");
 		timestamp (stdout, parg->con_num, 0);
-		printf("(tinypot_wait)\n");
+		printf("(tinypot_flush)\n");
 		fflush (stdout);
 		pthread_mutex_unlock (&print_mutex);
+		fflush (writeFD);
 	        break;
 	    default:
 		fprintf(stderr, "Programming error, printing.\n");
@@ -186,6 +196,7 @@ static void* worker (void* arg)
 	    break;
 	}
 	if (finished) break;
+	/* Programming note: chr contains a valid character now. */
 
     	if (printing == 0)
 	{
@@ -200,6 +211,7 @@ static void* worker (void* arg)
 	if (chr == '\n')
 	{
 	    fflush (stdout);
+	    printing = 0;
 	    pthread_mutex_unlock (&print_mutex);
 	    if (iline == 0)
 	    {
@@ -215,15 +227,15 @@ static void* worker (void* arg)
 	        fprintf (writeFD, "$ ");
 	    }
 	    ++iline;
-	    my_sleep();
 	    fflush (writeFD);
-	    printing = 0;
+	    my_sleep();
 	}
 	else
 	{
 	    printing = 2;
 	}
-    }
+    } /* Loop over incoming characters */
+
     if (printing == 2)
     {
 	printf ("\n");
