@@ -23,8 +23,9 @@ To fish for Mirai bots, try this:
 $ tinypot - 23 2323 23231 6789 7547 587 23123 68 5060 1433 5555
 ```
 To engage other bots that have been in the news:
-$ tinypot - 2323 23231 6789 7547 587 23123 68 5060 433 5555 8080 8888 1194 6000
-6001 2580 8443 5431 139 445 9100
+```
+$ tinypot - 2323 23231 6789 7547 587 23123 68 5060 433 5555 8080 8888 1194 6000 6001 2580 8443 5431 139 445 9100
+```
 
 ## Comments
 This program provides a simple example of a TCP/IP server program, using BSD socket functions. It is also a simple example of Posix thread programming.
