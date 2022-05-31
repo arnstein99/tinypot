@@ -140,6 +140,7 @@ static void* worker (void* arg)
     pthread_mutex_unlock (&print_mutex);
     printing = 0;
     finished = 0;
+    my_sleep();
 
     /* Loop over incoming characters */
     while (1)
@@ -216,11 +217,6 @@ static void* worker (void* arg)
 	    if (iline == 0)
 	    {
 	        fprintf (writeFD, "Password:");
-	    }
-	    /* TODO: delete this clause */
-	    else if (iline == 1)
-	    {
-	        fprintf (writeFD, "$ ");
 	    }
 	    else
 	    {
