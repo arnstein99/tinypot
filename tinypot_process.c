@@ -54,7 +54,7 @@ int process_connection (int con_num, int port_num, int socketFD)
 	return 1;
     }
 
-    connectFD = accept (socketFD, (struct sockaddr*)(&addr), &addrlen);
+    connectFD = accept(socketFD, (struct sockaddr*)(&addr), &addrlen);
     if (0 > connectFD)
     {
 	timestamp (stderr, parg->con_num, 0);
@@ -290,15 +290,17 @@ char* my_time (void)
 
 static void my_sleep (void)
 {
-    static const double my_scale = (double)MY_MAX * 1000000 / RAND_MAX;
-    unsigned int sleep_time = rand();
-    sleep_time = (unsigned int)(my_scale * sleep_time);  /* seconds */
-    while (sleep_time >= 500000)
+    static const unsigned long e9 =  1000000000;
+    static const double my_scale = (double)MY_MAX * e9 / RAND_MAX;
+    struct timespec tv, rem;
+    unsigned long sleep_time = rand();
+    sleep_time = (unsigned long)(my_scale * sleep_time);  /* nanoseconds */
+    tv.tv_sec = sleep_time / e9;
+    tv.tv_nsec = sleep_time - (e9 * tv.tv_sec);
+    while (nanosleep(&tv, &rem) != 0)
     {
-	usleep (500000);
-	sleep_time -= 500000;
+        tv = rem;
     }
-    usleep (sleep_time);
 }
 
 static int timed_read (int d, void* buf, size_t nbyte, unsigned int seconds)

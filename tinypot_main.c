@@ -1,7 +1,7 @@
 /*
     Tuning
  */
-static const char* version = "1.4";
+static const char* version = "1.5";
 
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -98,9 +98,19 @@ int main (int argc, char* argv[])
 	sa.sin_port = htons ((uint16_t)port_num);
 
 	if (strcmp (address_arg, "*") == 0)
-	    sa.sin_addr.s_addr = htonl (INADDR_ANY);
+        {
+                sa.sin_addr.s_addr = htonl (INADDR_ANY);
+        }
 	else
-	    sa.sin_addr.s_addr = inet_addr (address_arg);
+        {
+            if ((sa.sin_addr.s_addr = inet_addr (address_arg)) == INADDR_NONE)
+            {
+                fprintf (stderr,
+                    "Cannot use \"%s\" with -listen.\n", address_arg);
+                fprintf (stderr, "Please use numbers, e.g. nn.nn.nn.nn .\n");
+                exit (EXIT_FAILURE);
+            }
+        }
 
 	if (bind (socketFD, (struct sockaddr *)(&sa), (socklen_t)sizeof (sa))
 	    == -1)
