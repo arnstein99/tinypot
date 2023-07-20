@@ -1,7 +1,7 @@
 /*
     Tuning
  */
-static const char* version = "1.5";
+static const char* version = "1.6";
 
 #include <sys/types.h>
 #include <sys/socket.h>

@@ -70,9 +70,6 @@ int process_connection (int con_num, int port_num, int socketFD)
     parg->connectFD = connectFD;
     parg->addr = addr;
 
-    /* Keep con_num in order on stdout */
-    my_sleep();
-
     if (pthread_create (&thread_handle, NULL, worker, (void*)parg) != 0)
     {
 	timestamp (stderr, parg->con_num, 0);
