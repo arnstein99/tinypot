@@ -1,5 +1,6 @@
 #include <stdlib.h>
 #include <unistd.h>
+#include <string.h>
 #include <stdio.h>
 #include <pthread.h>
 #include <sys/types.h>
@@ -243,12 +244,10 @@ static void* worker (void* arg)
 	timestamp (stdout, parg->con_num, 0);
 	printing = 1;
     }
-    fflush (stdout);
     if (retval == -1)
-	perror ("close connection");
+	fprintf (stdout, "close connection: %s\n", strerror(errno));
     else
-	fprintf (stderr, "close connection: end of file\n");
-    fflush (stderr);
+	fprintf (stdout, "close connection: end of file\n");
     pthread_mutex_unlock (&print_mutex);
     printing = 0;
 
