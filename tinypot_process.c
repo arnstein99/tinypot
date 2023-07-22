@@ -50,7 +50,7 @@ int process_connection (int con_num, int port_num, int socketFD)
 
     if ((parg = (struct Arg*)malloc (sizeof (struct Arg))) == NULL)
     {
-	timestamp (stderr, parg->con_num, 0);
+	timestamp (stderr, 0, 0);
         perror ("malloc failed");
 	return 1;
     }
@@ -235,6 +235,7 @@ static void* worker (void* arg)
 	printf ("\n");
 	timestamp (stdout, parg->con_num, 0);
         printf ("(Missing newline)\n");
+        fflush (stdout);
 	pthread_mutex_unlock (&print_mutex);
 	printing = 0;
     }
@@ -248,6 +249,7 @@ static void* worker (void* arg)
 	fprintf (stdout, "close connection: %s\n", strerror(errno));
     else
 	fprintf (stdout, "close connection: end of file\n");
+    fflush (stdout);
     pthread_mutex_unlock (&print_mutex);
     printing = 0;
 
