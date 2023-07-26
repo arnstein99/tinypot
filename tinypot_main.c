@@ -1,7 +1,7 @@
 /*
     Tuning
  */
-static const char* version = "1.6";
+static const char* version = "1.7";
 
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -92,6 +92,13 @@ int main (int argc, char* argv[])
 	    perror ("cannot create socket");
 	    exit (EXIT_FAILURE);
 	}
+    int reuse = 1;
+    if (setsockopt(
+        socketFD, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse)) < 0)
+    {
+	    perror ("cannot set SO_REUSEADDR");
+	    exit (EXIT_FAILURE);
+    }
 
 	memset (&sa, 0, sizeof (sa));
 	sa.sin_family = AF_INET;
