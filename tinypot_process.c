@@ -5,14 +5,19 @@
 #include <pthread.h>
 #include <sys/types.h>
 #include <sys/socket.h>
+#include <sys/time.h>
 #include <arpa/inet.h>
 #include <time.h>
 #include <errno.h>
 #include "tinypot_process.h"
+static const unsigned long e9 =  1000000000;
+static const unsigned long e6 =  1000000;
 
-/* The following constant will be multiplied by a million, so don't let it get
- * much larger than 2000. */
-#define MY_MAX 10 /* seconds */
+/* Delays will be uniformly distributed between 0 and this number of seconds */
+#define MY_MAX 10
+
+/* Seconds to wait before forcing a newline on output */
+#define LINE_WAIT 9
 
 struct Arg
 {
@@ -26,7 +31,9 @@ struct Arg
 static void* worker (void* arg);
 static void timestamp (FILE* fd, int con_num, int colon);
 static void my_sleep (void);
-static int timed_read (int d, void* buf, size_t nbyte, unsigned int seconds);
+static int timed_read (
+    int d, void* buf, size_t nbyte, const struct timeval* deadline);
+static void subtractfrom(struct timeval* big, const struct timeval* small);
 
 static pthread_mutex_t print_mutex = PTHREAD_MUTEX_INITIALIZER;
 
@@ -139,11 +146,14 @@ static void* worker (void* arg)
     printing = 0;
     finished = 0;
     my_sleep();
+    struct timeval deadline;
+    gettimeofday(&deadline, NULL);
+    deadline.tv_sec += LINE_WAIT;
 
     /* Loop over incoming characters */
     while (1)
     {
-	retval = timed_read (parg->connectFD, &chr, 1, 30);
+	retval = timed_read (parg->connectFD, &chr, 1, &deadline);
 	switch (retval)
 	{
 	case 0:
@@ -159,6 +169,8 @@ static void* worker (void* arg)
 	    break;
 	case -2:
 	    /* timeout */
+            gettimeofday(&deadline, NULL);
+            deadline.tv_sec += LINE_WAIT;
 	    switch (printing)
 	    {
 	    case 0:
@@ -214,7 +226,7 @@ static void* worker (void* arg)
 	    pthread_mutex_unlock (&print_mutex);
 	    if (iline == 0)
 	    {
-	        fprintf (writeFD, "Password:");
+	        fprintf (writeFD, "Password: ");
 	    }
 	    else
 	    {
@@ -223,6 +235,8 @@ static void* worker (void* arg)
 	    ++iline;
 	    fflush (writeFD);
 	    my_sleep();
+            gettimeofday(&deadline, NULL);
+            deadline.tv_sec += LINE_WAIT;
 	}
 	else
 	{
@@ -288,31 +302,35 @@ char* my_time (void)
 
 static void my_sleep (void)
 {
-    static const unsigned long e9 =  1000000000;
-    static const double my_scale = (double)MY_MAX * e9 / RAND_MAX;
+    static const double my_scale = (double)MY_MAX / RAND_MAX;
+    double  sleep_time = my_scale * rand();
     struct timespec tv, rem;
-    unsigned long sleep_time = rand();
-    sleep_time = (unsigned long)(my_scale * sleep_time);  /* nanoseconds */
-    tv.tv_sec = sleep_time / e9;
-    tv.tv_nsec = sleep_time - (e9 * tv.tv_sec);
+    tv.tv_sec = sleep_time;
+    tv.tv_nsec = e9 * (sleep_time - tv.tv_sec);
     while (nanosleep(&tv, &rem) != 0)
     {
         tv = rem;
     }
 }
 
-static int timed_read (int d, void* buf, size_t nbyte, unsigned int seconds)
+static int timed_read (
+    int d, void* buf, size_t nbyte, const struct timeval* deadline)
 {
-    struct timeval wait;
     fd_set read_fds;
     int status;
     int retval;
 
-    wait.tv_sec = seconds;
-    wait.tv_usec = 0;
+    struct timeval now;
+    gettimeofday(&now, NULL);
+    struct timeval delta = *deadline;
+    subtractfrom(&delta, &now);
+    if ((delta.tv_sec == 0) && (delta.tv_usec == 0))
+    {
+        return -2;
+    }
     FD_ZERO (&read_fds);
     FD_SET (d, &read_fds);
-    status = select (d+1, &read_fds, NULL, NULL, &wait);
+    status = select (d+1, &read_fds, NULL, NULL, &delta);
     switch (status)
     {
     case 0:
@@ -328,4 +346,26 @@ static int timed_read (int d, void* buf, size_t nbyte, unsigned int seconds)
         break;
     }
     return retval;
+}
+
+static void subtractfrom(struct timeval* big, const struct timeval* small)
+{
+    static const struct timeval zero = {0, 0};
+    if (big->tv_sec < small->tv_sec)
+    {
+        *big = zero;
+        return;
+    }
+    big->tv_sec -= small->tv_sec;
+    if (big->tv_usec < small->tv_usec)
+    {
+        if (big->tv_sec < 1)
+        {
+            *big = zero;
+            return;
+        }
+        --big->tv_sec;
+        big->tv_usec += e6;
+    }
+    big->tv_usec -= small->tv_usec;
 }
