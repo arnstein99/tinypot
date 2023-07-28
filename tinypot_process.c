@@ -48,28 +48,28 @@ int process_connection (int con_num, int port_num, int socketFD)
 
     optval = 1;
     if (setsockopt (
-	socketFD, SOL_SOCKET, SO_KEEPALIVE, &optval, sizeof(optval))
-	< 0)
+        socketFD, SOL_SOCKET, SO_KEEPALIVE, &optval, sizeof(optval))
+        < 0)
     {
-	perror("cannot set keepalive");
-	exit (EXIT_FAILURE);
+        perror("cannot set keepalive");
+        exit (EXIT_FAILURE);
     }
 
     if ((parg = (struct Arg*)malloc (sizeof (struct Arg))) == NULL)
     {
-	timestamp (stderr, 0, 0);
+        timestamp (stderr, 0, 0);
         perror ("malloc failed");
-	return 1;
+        return 1;
     }
 
     connectFD = accept(socketFD, (struct sockaddr*)(&addr), &addrlen);
     if (0 > connectFD)
     {
-	timestamp (stderr, parg->con_num, 0);
-	perror ("accept failed");
-	free ((void*)parg);
-	if (errno == EMFILE) return 1;
-	return 0;
+        timestamp (stderr, parg->con_num, 0);
+        perror ("accept failed");
+        free ((void*)parg);
+        if (errno == EMFILE) return 1;
+        return 0;
     }
 
     parg->con_num = con_num;
@@ -80,16 +80,16 @@ int process_connection (int con_num, int port_num, int socketFD)
 
     if (pthread_create (&thread_handle, NULL, worker, (void*)parg) != 0)
     {
-	timestamp (stderr, parg->con_num, 0);
+        timestamp (stderr, parg->con_num, 0);
         perror ("pthread_create failed");
-	free ((void*)parg);
-	return 1;
+        free ((void*)parg);
+        return 1;
     }
     if (pthread_detach (thread_handle) != 0)
     {
         perror ("pthread_detach failed");
-	free ((void*)parg);
-	return 1;
+        free ((void*)parg);
+        return 1;
     }
 
     return 0;
@@ -105,9 +105,9 @@ static void* worker (void* arg)
     struct Arg* parg = (struct Arg*)arg;
     int printing = 0;    /* 2 if a \n, time stamp, and char(s) have been sent,
                           * 1 if a \n, time stamp have been sent,
-			  * 0 if a \n has been sent.
-			  * NO OTHER CONDITIONS ALLOWED.
-			  */
+                          * 0 if a \n has been sent.
+                          * NO OTHER CONDITIONS ALLOWED.
+                          */
     int iline = 0;
     int finished;
 
@@ -115,24 +115,24 @@ static void* worker (void* arg)
     pthread_mutex_lock (&print_mutex);
 
     if (getsockname (
-	parg->connectFD, (struct sockaddr*)(&local_sa), &local_length) == -1)
+        parg->connectFD, (struct sockaddr*)(&local_sa), &local_length) == -1)
     {
-	timestamp (stderr, parg->con_num, 0);
-	perror ("getsockname failed");
-	close (parg->connectFD);
-	free ((void*)parg);
-	pthread_mutex_unlock (&print_mutex);
-	pthread_exit (NULL);
+        timestamp (stderr, parg->con_num, 0);
+        perror ("getsockname failed");
+        close (parg->connectFD);
+        free ((void*)parg);
+        pthread_mutex_unlock (&print_mutex);
+        pthread_exit (NULL);
     }
 
     if ((writeFD = fdopen (parg->connectFD, "w")) == NULL)
     {
-	timestamp (stderr, parg->con_num, 0);
+        timestamp (stderr, parg->con_num, 0);
         perror ("fdopen failed");
-	close (parg->connectFD);
-	free ((void*)parg);
-	pthread_mutex_unlock (&print_mutex);
-	pthread_exit (NULL);
+        close (parg->connectFD);
+        free ((void*)parg);
+        pthread_mutex_unlock (&print_mutex);
+        pthread_exit (NULL);
     }
 
     fprintf (writeFD, "login: ");
@@ -140,7 +140,7 @@ static void* worker (void* arg)
     timestamp (stdout, parg->con_num, 0);
     printf ("open connection %s -> ", inet_ntoa (parg->addr.sin_addr));
     printf ("%s:%d\n",
-	inet_ntoa (local_sa.sin_addr), parg->port_num);
+        inet_ntoa (local_sa.sin_addr), parg->port_num);
     fflush (stdout);
     pthread_mutex_unlock (&print_mutex);
     printing = 0;
@@ -153,116 +153,116 @@ static void* worker (void* arg)
     /* Loop over incoming characters */
     while (1)
     {
-	retval = timed_read (parg->connectFD, &chr, 1, &deadline);
-	switch (retval)
-	{
-	case 0:
-	    /* Got no character */
-	    finished = 1;
-	    break;
-	case 1:
-	    /* Got a character, keep going */
-	    break;
-	case -1:
-	    /* Read error */
-	    finished = 1;
-	    break;
-	case -2:
-	    /* timeout */
+        retval = timed_read (parg->connectFD, &chr, 1, &deadline);
+        switch (retval)
+        {
+        case 0:
+            /* Got no character */
+            finished = 1;
+            break;
+        case 1:
+            /* Got a character, keep going */
+            break;
+        case -1:
+            /* Read error */
+            finished = 1;
+            break;
+        case -2:
+            /* timeout */
             gettimeofday(&deadline, NULL);
             deadline.tv_sec += LINE_WAIT;
-	    switch (printing)
-	    {
-	    case 0:
-		/* Mutex already unlocked, nothing to do. */
-	        break;
-	    case 1:
-	        /* Mutex has been locked and a timestamp has been printed */
-		printf("(tinypot_wait)\n");
-		fflush (stdout);
-		pthread_mutex_unlock (&print_mutex);
-	        break;
-	    case 2:
-		/* Mutex has been locked and some characters have been echoed */
-		printf ("\n");
-		timestamp (stdout, parg->con_num, 0);
-		printf("(tinypot_flush)\n");
-		fflush (stdout);
-		pthread_mutex_unlock (&print_mutex);
-		fflush (writeFD);
-	        break;
-	    default:
-		fprintf(stderr, "Programming error, printing.\n");
-		fflush(stderr);
-		finished = 1;
-	        break;
-	    }
-	    printing = 0;
-	    continue;
-	    break;
-	default:
-	    fprintf(stderr, "Programming error, read.\n");
-	    fflush(stderr);
-	    finished = 1;
-	    break;
-	}
-	if (finished) break;
-	/* Programming note: chr contains a valid character now. */
+            switch (printing)
+            {
+            case 0:
+                /* Mutex already unlocked, nothing to do. */
+                break;
+            case 1:
+                /* Mutex has been locked and a timestamp has been printed */
+                printf("(tinypot_wait)\n");
+                fflush (stdout);
+                pthread_mutex_unlock (&print_mutex);
+                break;
+            case 2:
+                /* Mutex has been locked and some characters have been echoed */
+                printf ("\n");
+                timestamp (stdout, parg->con_num, 0);
+                printf("(tinypot_flush)\n");
+                fflush (stdout);
+                pthread_mutex_unlock (&print_mutex);
+                fflush (writeFD);
+                break;
+            default:
+                fprintf(stderr, "Programming error, printing.\n");
+                fflush(stderr);
+                finished = 1;
+                break;
+            }
+            printing = 0;
+            continue;
+            break;
+        default:
+            fprintf(stderr, "Programming error, read.\n");
+            fflush(stderr);
+            finished = 1;
+            break;
+        }
+        if (finished) break;
+        /* Programming note: chr contains a valid character now. */
 
-    	if (printing == 0)
-	{
-	    pthread_mutex_lock (&print_mutex);
-	    timestamp (stdout, parg->con_num, 1);
-	    fflush (stdout);
-	    printing = 1;
-	}
-	if (iline > 1)
-	    putc (chr, writeFD);
-	putchar (chr);
-	if (chr == '\n')
-	{
-	    fflush (stdout);
-	    printing = 0;
-	    pthread_mutex_unlock (&print_mutex);
-	    if (iline == 0)
-	    {
-	        fprintf (writeFD, "Password: ");
-	    }
-	    else
-	    {
-	        fprintf (writeFD, "$ ");
-	    }
-	    ++iline;
-	    fflush (writeFD);
-	    my_sleep();
+        if (printing == 0)
+        {
+            pthread_mutex_lock (&print_mutex);
+            timestamp (stdout, parg->con_num, 1);
+            fflush (stdout);
+            printing = 1;
+        }
+        if (iline > 1)
+            putc (chr, writeFD);
+        putchar (chr);
+        if (chr == '\n')
+        {
+            fflush (stdout);
+            printing = 0;
+            pthread_mutex_unlock (&print_mutex);
+            if (iline == 0)
+            {
+                fprintf (writeFD, "Password: ");
+            }
+            else
+            {
+                fprintf (writeFD, "$ ");
+            }
+            ++iline;
+            fflush (writeFD);
+            my_sleep();
             gettimeofday(&deadline, NULL);
             deadline.tv_sec += LINE_WAIT;
-	}
-	else
-	{
-	    printing = 2;
-	}
+        }
+        else
+        {
+            printing = 2;
+        }
     } /* Loop over incoming characters */
 
     if (printing == 2)
     {
-	printf ("\n");
-	timestamp (stdout, parg->con_num, 0);
+        printf ("\n");
+        timestamp (stdout, parg->con_num, 0);
         printf ("(Missing newline)\n");
         fflush (stdout);
-	pthread_mutex_unlock (&print_mutex);
-	printing = 0;
+        pthread_mutex_unlock (&print_mutex);
+        printing = 0;
     }
     if (printing == 0)
     {
-	pthread_mutex_lock (&print_mutex);
-	timestamp (stdout, parg->con_num, 0);
-	printing = 1;
+        pthread_mutex_lock (&print_mutex);
+        timestamp (stdout, parg->con_num, 0);
+        printing = 1;
     }
     if (retval == -1)
-	fprintf (stdout, "close connection: %s\n", strerror(errno));
+        fprintf (stdout, "close connection: %s\n", strerror(errno));
     else
-	fprintf (stdout, "close connection: end of file\n");
+        fprintf (stdout, "close connection: end of file\n");
     fflush (stdout);
     pthread_mutex_unlock (&print_mutex);
     printing = 0;
@@ -290,13 +290,13 @@ char* my_time (void)
     static __thread char buf[128];
     if ((tt = time (NULL)) == -1)
     {
-	perror ("time failed");
-	pthread_exit (NULL);
+        perror ("time failed");
+        pthread_exit (NULL);
     }
     tm = *localtime (&tt);
     snprintf (buf, sizeof(buf), "%04d/%02d/%02d %02d:%02d:%02d",
         tm.tm_year+1900, tm.tm_mon+1, tm.tm_mday,
-	tm.tm_hour, tm.tm_min, tm.tm_sec);
+        tm.tm_hour, tm.tm_min, tm.tm_sec);
     return &buf[0];
 }
 
@@ -335,11 +335,11 @@ static int timed_read (
     {
     case 0:
         /* timeout */
-	retval = -2;
+        retval = -2;
         break;
     case 1:
         /* A character is available */
-	retval = read(d, buf, nbyte);
+        retval = read(d, buf, nbyte);
         break;
     default:
         retval = -3;
