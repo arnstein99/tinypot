@@ -2,7 +2,7 @@ static const char* version = "1.8";
 
 #include <sys/types.h>
 #include <sys/socket.h>
-#include <sys/select.h>
+#include <sys/poll.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <signal.h>
@@ -12,167 +12,156 @@ static const char* version = "1.8";
 #include <unistd.h>
 #include "tinypot_process.h"
 
-#define INVALID_SOCKET (-1)
-#define MAX(a,b) \
-    ((a) > (b) ? (a) : (b))
-
-typedef struct
+int main(int argc, char* argv[])
 {
-    int port_num;
-    int fd;
-}
-Record;
-
-int main (int argc, char* argv[])
-{
-    fd_set master_fds;
     int socketFD;
     int port_num;
     int index;
     char* address_arg;
     int con_num;
     int iarg;
-    Record* record;
+    int* port_array;
+    struct pollfd* pds;
     int num_ports;
-    int maxfd = -1;
 
-    printf ("Program tinypot version %s\n", version);
+    printf("Program tinypot version %s\n", version);
 
     address_arg = "";
-    switch (argc)
+    switch(argc)
     {
     case 1:
     case 2:
-        fprintf (stderr, "Usage: tinypot [address|-] portnum portnum ...\n");
-        exit (EXIT_FAILURE);
+        fprintf(stderr, "Usage: tinypot [address|-] portnum portnum ...\n");
+        exit(EXIT_FAILURE);
         break;
     default:
         address_arg = argv[1];
         break;
     }
 
-    if (strcmp (address_arg, "-") == 0)
+    if (strcmp(address_arg, "-") == 0)
     {
         address_arg = "*";
     }
     num_ports = argc - 2;
-    if ((record = (Record*)malloc (num_ports * sizeof (Record))) == NULL)
+    if ((port_array = (int*)malloc(num_ports * sizeof(int))) == NULL)
     {
-        perror ("malloc failed");
-        exit (EXIT_FAILURE);
+        perror("malloc failed");
+        exit(EXIT_FAILURE);
+    }
+    if ((pds = (struct pollfd*)malloc(num_ports * sizeof(struct pollfd))) ==
+        NULL)
+    {
+        perror("malloc failed");
+        exit(EXIT_FAILURE);
     }
 
-    if (signal (SIGPIPE, SIG_IGN) == SIG_ERR)
+    if (signal(SIGPIPE, SIG_IGN) == SIG_ERR)
     {
-        perror ("signal failed");
-        exit (EXIT_FAILURE);
+        perror("signal failed");
+        exit(EXIT_FAILURE);
     }
-    if (signal (SIGTRAP, SIG_IGN) == SIG_ERR)
+    if (signal(SIGTRAP, SIG_IGN) == SIG_ERR)
     {
-        perror ("signal failed");
-        exit (EXIT_FAILURE);
+        perror("signal failed");
+        exit(EXIT_FAILURE);
     }
 
-    FD_ZERO (&master_fds);
+    memset(pds, 0, num_ports * sizeof(struct pollfd));
     for (iarg = 2 ; iarg < argc ; ++iarg)
     {
         char* port_arg = argv[iarg];
         struct sockaddr_in sa;
-        if (sscanf (port_arg, "%d", &port_num) != 1)
+        if (sscanf(port_arg, "%d", &port_num) != 1)
         {
-            fprintf (stderr, "Illegal numeric expression \"%s\"\n", port_arg);
-            exit (EXIT_FAILURE);
+            fprintf(stderr, "Illegal numeric expression \"%s\"\n", port_arg);
+            exit(EXIT_FAILURE);
         }
-        socketFD = socket (PF_INET, SOCK_STREAM, IPPROTO_TCP);
+        socketFD = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP);
         if (socketFD == -1)
         {
-            perror ("cannot create socket");
-            exit (EXIT_FAILURE);
+            perror("cannot create socket");
+            exit(EXIT_FAILURE);
         }
         int reuse = 1;
         if (setsockopt(
             socketFD, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse)) < 0)
         {
-                perror ("cannot set SO_REUSEADDR");
-                exit (EXIT_FAILURE);
+                perror("cannot set SO_REUSEADDR");
+                exit(EXIT_FAILURE);
         }
 
-        memset (&sa, 0, sizeof (sa));
+        memset(&sa, 0, sizeof(sa));
         sa.sin_family = AF_INET;
-        sa.sin_port = htons ((uint16_t)port_num);
+        sa.sin_port = htons((uint16_t)port_num);
 
-        if (strcmp (address_arg, "*") == 0)
+        if (strcmp(address_arg, "*") == 0)
         {
-                sa.sin_addr.s_addr = htonl (INADDR_ANY);
+                sa.sin_addr.s_addr = htonl(INADDR_ANY);
         }
         else
         {
-            if ((sa.sin_addr.s_addr = inet_addr (address_arg)) == INADDR_NONE)
+            if ((sa.sin_addr.s_addr = inet_addr(address_arg)) == INADDR_NONE)
             {
-                fprintf (stderr,
+                fprintf(stderr,
                     "Cannot use \"%s\" with -listen.\n", address_arg);
-                fprintf (stderr, "Please use numbers, e.g. nn.nn.nn.nn .\n");
-                exit (EXIT_FAILURE);
+                fprintf(stderr, "Please use numbers, e.g. nn.nn.nn.nn .\n");
+                exit(EXIT_FAILURE);
             }
         }
 
-        if (bind (socketFD, (struct sockaddr *)(&sa), (socklen_t)sizeof (sa))
+        if (bind(socketFD, (struct sockaddr *)(&sa), (socklen_t)sizeof(sa))
             == -1)
         {
-            fprintf (stderr, "On port %d, ", port_num);
-            perror ("bind failed");
-            exit (EXIT_FAILURE);
+            fprintf(stderr, "On port %d, ", port_num);
+            perror("bind failed");
+            exit(EXIT_FAILURE);
         }
 
-        if (listen (socketFD, 10) == -1)
+        if (listen(socketFD, 10) == -1)
         {
-            perror ("listen failed");
-            exit (EXIT_FAILURE);
+            perror("listen failed");
+            exit(EXIT_FAILURE);
         }
-        FD_SET (socketFD, &master_fds);
-        maxfd = MAX (maxfd, socketFD);
-        record[iarg-2].port_num = port_num;
-        record[iarg-2].fd = socketFD;
+        port_array[iarg-2] = port_num;
+        pds[iarg-2].fd     = socketFD;
+        pds[iarg-2].events = POLLIN;
     }
 
-    printf ("%s Listening on address %s, %d TCP/IP ports:\n",
+    printf("%s Listening on address %s, %d TCP/IP ports:\n",
         my_time(), address_arg, num_ports);
-    printf ("    ");
+    printf("    ");
     for (index = 0 ; index < num_ports ; ++index)
-        printf (" %d", record[index].port_num);
-    printf ("\n");
-    fflush (stdout);
+        printf(" %d", port_array[index]);
+    printf("\n");
+    fflush(stdout);
 
-    for (con_num = 1 ; ; ++con_num)
+    con_num = 0;
+    while (1)
     {
-        int status;
-        fd_set read_fds = master_fds;
-
-        status = select (maxfd+1, &read_fds, NULL, NULL, NULL);
+        int status = poll(pds, num_ports, -1);
         if (status < 0)
         {
-            perror ("select failed");
+            perror("poll failed");
             continue;
         }
-        socketFD = INVALID_SOCKET;
+        if (status == 0)
+        {
+            fprintf(stderr, "Unexpected 0 return from poll()\n");
+            exit(1);
+        }
         for (index = 0 ; index < num_ports ; ++index)
         {
-            if (FD_ISSET (record[index].fd, &read_fds))
+            if (pds[index].revents == 0) continue;
+            if (pds[index].revents != POLLIN)
             {
-                socketFD = record[index].fd;
-                port_num = record[index].port_num;
-                break;
+                fprintf(stderr, "Unexpected revents value %d\n",
+                    pds[index].revents);
+                exit(1);
             }
+            if (process_connection(++con_num, port_array[index],
+                pds[index].fd) != 0) break;
         }
-        if (socketFD == INVALID_SOCKET)
-        {
-            fprintf (stderr, "%s: spurious connection\n", my_time());
-            fflush (stderr);
-            continue;
-        }
-
-        if (process_connection (con_num, port_num, socketFD) != 0)
-            break;
     }
 
     return EXIT_SUCCESS;
