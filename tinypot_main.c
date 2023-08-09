@@ -155,7 +155,7 @@ int main(int argc, char* argv[])
             if (pds[index].revents == 0) continue;
             if (pds[index].revents != POLLIN)
             {
-                fprintf(stderr, "Unexpected revents value %d\n",
+                fprintf(stderr, "Unexpected revents value %d (1)\n",
                     pds[index].revents);
                 exit(1);
             }

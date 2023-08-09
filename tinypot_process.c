@@ -342,12 +342,13 @@ static int timed_read(
         break;
     case 1:
         /* A character should be available */
-        if (pfd.revents != POLLIN)
+        if (!(pfd.revents & POLLIN))
         {
-            fprintf(stderr, "Unexpected revents value %d\n",
-                pfd.events);
+            fprintf(stderr, "Unexpected revents value %d (2)\n",
+                pfd.revents);
             exit(1);
         }
+        /* Programming note: POLLHUP and POLLERR are ignored here. */
         retval = read(d, buf, nbyte);
         break;
     default:
