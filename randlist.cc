@@ -19,7 +19,6 @@ struct Inputs
 static void usage(int exit_value);
 static Inputs process_inputs(int argc, char* argv[]);
 static std::set<unsigned> compute(const Inputs&);
-static unsigned my_rand();
 
 int main(int argc, char* argv[])
 {
@@ -84,27 +83,25 @@ static std::set<unsigned> compute(const Inputs& inputs)
         }
     }
 
+    // Obtain a random seed for random number generator
+    auto now = system_clock::now();
+    auto elapsed = now.time_since_epoch();
+    auto micro = elapsed.count();
+    unsigned seed = micro & 0xFFFFFFFF;
+    srand(seed);
+
     // Generate the final list of random numbers
     std::set<unsigned> final_set;
     double scale =
         static_cast<double>(inputs.range[1] - inputs.range[0]) / RAND_MAX;
     while (final_set.size() < inputs.count)
     {
-        val = (scale * my_rand()) + 0.5;
+        val = (scale * rand()) + 0.5;
+        val += inputs.range[0];
         if (prohibited_set.find(val) == prohibited_set.end())
             final_set.insert(val);
     }
     return final_set;
-}
-
-static unsigned my_rand()
-{
-    auto now = system_clock::now();
-    auto elapsed = now.time_since_epoch();
-    auto micro = elapsed.count();
-    unsigned seed = micro & 0xFFFFFFFF;
-    srand(seed);
-    return rand();
 }
 
 void usage(int exit_value)
