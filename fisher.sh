@@ -1,4 +1,5 @@
 #
+# TODO: change all file paths
 function main
 {
     my_pid=$$
@@ -7,20 +8,23 @@ function main
     while true
     do
         array=$(./randlist ${@})
-        tinypot - ${array[@]} &
-        ident=$!
-        echo "PIDs are ${my_pid} ${ident}" >&2
-        trap "cleanup $ident" \
-            SIGHUP SIGINT SIGQUIT SIGABRT SIGKILL SIGUSR1 SIGUSR2 SIGTERM
-        sleep $delay
-        kill -9 $ident
+        ./tinypot - ${array[@]} &
+        tinypot_pid=$!
+        echo "My pid is ${my_pid}" >&2
+        sleep $delay &
+        sleep_pid="$!"
+        trap "cleanup $tinypot_pid $sleep_pid" \
+            SIGHUP SIGINT SIGQUIT SIGABRT SIGUSR1 SIGUSR2 SIGTERM
+        wait
+        kill -9 $tinypot_pid
+        sleep 5  # trying to avoid "port already in use" failure
     done
 }
 function cleanup
-# process_id
+# process_id process_id ...
 {
-    echo "Killing process $1" >&2
-    kill -9 "$1"
+    echo "Killing processes $@" >&2
+    kill -9 "$@"
     exit 0
 }
 main "$@"
