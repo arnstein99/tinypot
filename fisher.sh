@@ -1,5 +1,4 @@
 #
-# TODO: change all file paths
 function main
 {
     my_pid=$$
@@ -7,8 +6,8 @@ function main
     shift
     while true
     do
-        array=$(./randlist ${@})
-        ./tinypot - ${array[@]} &
+        array=$(randlist ${@})
+        service_tinypot - ${array[@]} &
         tinypot_pid=$!
         echo "My pid is ${my_pid}" >&2
         sleep $delay &
