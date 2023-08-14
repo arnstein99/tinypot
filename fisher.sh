@@ -1,13 +1,23 @@
 #
+case $# in
+5|6)
+    ;;
+*)
+    echo "Usage: fisher.sh [address|-] lifespan first_port last_port port_count [prohibited_file]" >&2
+    exit 1
+    ;;
+esac
 function main
 {
     my_pid=$$
-    delay=$1
+    address="$1"
+    shift
+    delay="$1"
     shift
     while true
     do
         array=$(randlist ${@})
-        service_tinypot - ${array[@]} &
+        service_tinypot "$address" ${array[@]} &
         tinypot_pid=$!
         echo "My pid is ${my_pid}" >&2
         sleep $delay &
