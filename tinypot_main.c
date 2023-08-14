@@ -143,12 +143,12 @@ int main(int argc, char* argv[])
         if (status < 0)
         {
             perror("poll failed");
-            continue;
+            exit(EXIT_FAILURE);
         }
         if (status == 0)
         {
             fprintf(stderr, "Unexpected 0 return from poll()\n");
-            exit(1);
+            exit(EXIT_FAILURE);
         }
         for (index = 0 ; index < num_ports ; ++index)
         {
@@ -157,10 +157,10 @@ int main(int argc, char* argv[])
             {
                 fprintf(stderr, "Unexpected revents value %d (1)\n",
                     pds[index].revents);
-                exit(1);
+                exit(EXIT_FAILURE);
             }
             if (process_connection(++con_num, port_array[index],
-                pds[index].fd) != 0) break;
+                pds[index].fd) != 0) exit(EXIT_FAILURE);
         }
     }
 
