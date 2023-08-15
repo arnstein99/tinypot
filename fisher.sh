@@ -1,14 +1,15 @@
 #
-case $# in
-5|6)
-    ;;
-*)
-    echo "Usage: fisher.sh [address|-] lifespan first_port last_port port_count [prohibited_file]" >&2
-    exit 1
-    ;;
-esac
 function main
 {
+    case $# in
+    5|6)
+        ;;
+    *)
+        echo "Usage: fisher.sh [address|-] lifespan first_port last_port port_count [prohibited_file]" >&2
+        exit 1
+        ;;
+    esac
+
     my_pid=$$
     address="$1"
     shift
@@ -22,18 +23,26 @@ function main
         echo "My pid is ${my_pid}" >&2
         sleep $delay &
         sleep_pid="$!"
-        trap "cleanup $tinypot_pid $sleep_pid" \
-            SIGHUP SIGINT SIGQUIT SIGABRT SIGUSR1 SIGUSR2 SIGTERM
-        wait
+        trap "cleanup $tinypot_pid $sleep_pid" SIGINT SIGQUIT SIGABRT SIGTERM
+        trap "cycle   $tinypot_pid $sleep_pid" SIGHUP
+        wait "$sleep_pid"
         kill -9 $tinypot_pid
         sleep 5  # trying to avoid "port already in use" failure
     done
 }
+
+function cycle
+# process_id process_id ...
+{
+    kill -9 "$@"
+}
+
 function cleanup
 # process_id process_id ...
 {
-    echo "Killing processes $@" >&2
-    kill -9 "$@"
-    exit 0
+    cycle "$@"
+    echo "fisher.sh terminated by signal" >&2
+    exit 1
 }
+
 main "$@"
