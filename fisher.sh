@@ -24,8 +24,8 @@ function main
         sleep $delay &
         sleep_pid="$!"
         trap "cleanup $tinypot_pid $sleep_pid" SIGINT SIGQUIT SIGABRT SIGTERM
-        trap "cycle   $tinypot_pid $sleep_pid" SIGHUP
-        wait "$sleep_pid"
+        trap "cycle                $sleep_pid" SIGHUP
+        wait "$sleep_pid" >/dev/null 2>&1
         kill -9 $tinypot_pid
         sleep 5  # trying to avoid "port already in use" failure
     done
