@@ -271,9 +271,9 @@ static void* worker(void* arg)
     /* This fails so often with "endpoint is not connected" that it is not
      * interesting */
     shutdown(parg->connectFD, SHUT_RDWR);
-
-    fclose(writeFD);
     close(parg->connectFD);
+    fclose(writeFD);
+
     free((void*)parg);
     pthread_exit(NULL);
 }

@@ -67,16 +67,30 @@ int main(int argc, char* argv[])
         exit(EXIT_FAILURE);
     }
 
-    memset(pds, 0, num_ports * sizeof(struct pollfd));
+    /* Print opening message early in case of later failure */
     for (iarg = 2 ; iarg < argc ; ++iarg)
     {
         char* port_arg = argv[iarg];
-        struct sockaddr_in sa;
         if (sscanf(port_arg, "%d", &port_num) != 1)
         {
             fprintf(stderr, "Illegal numeric expression \"%s\"\n", port_arg);
             exit(EXIT_FAILURE);
         }
+        port_array[iarg-2] = port_num;
+    }
+    printf("%s Listening on address %s, %d TCP/IP ports:\n",
+        my_time(), address_arg, num_ports);
+    printf("    ");
+    for (index = 0 ; index < num_ports ; ++index)
+        printf(" %d", port_array[index]);
+    printf("\n");
+    fflush(stdout);
+
+    memset(pds, 0, num_ports * sizeof(struct pollfd));
+    for (iarg = 2 ; iarg < argc ; ++iarg)
+    {
+        port_num = port_array[iarg-2];
+        struct sockaddr_in sa;
         socketFD = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP);
         if (socketFD == -1)
         {
@@ -123,18 +137,9 @@ int main(int argc, char* argv[])
             perror("listen failed");
             exit(EXIT_FAILURE);
         }
-        port_array[iarg-2] = port_num;
         pds[iarg-2].fd     = socketFD;
         pds[iarg-2].events = POLLIN;
     }
-
-    printf("%s Listening on address %s, %d TCP/IP ports:\n",
-        my_time(), address_arg, num_ports);
-    printf("    ");
-    for (index = 0 ; index < num_ports ; ++index)
-        printf(" %d", port_array[index]);
-    printf("\n");
-    fflush(stdout);
 
     con_num = 0;
     while (1)
