@@ -1,4 +1,4 @@
-static const char* version = "1.10";
+static const char* version = "1.10.1";
 
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -25,6 +25,7 @@ int main(int argc, char* argv[])
     int num_ports, num_ports_requested;
 
     printf("Program tinypot version %s\n", version);
+    fflush(stdout);
 
     listening_address_arg = "";
     switch(argc)
