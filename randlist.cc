@@ -10,6 +10,9 @@
 #include <chrono>
 using namespace std::chrono;
 
+// Tuning
+static const size_t max_mult = 10000;
+
 struct Inputs
 {
     unsigned range[2];
@@ -94,8 +97,15 @@ static std::set<unsigned> compute(const Inputs& inputs)
     std::set<unsigned> final_set;
     double scale =
         static_cast<double>(inputs.range[1] - inputs.range[0]) / RAND_MAX;
+    size_t max_tries = max_mult * (inputs.range[1] - inputs.range[0]);
     while (final_set.size() < inputs.count)
     {
+        if (--max_tries == 0)
+        {
+            std::cerr <<
+                "Warning: terminating early (too many tries)." << std::endl;
+            break;
+        }
         val = (scale * rand()) + 0.5;
         val += inputs.range[0];
         if (prohibited_set.find(val) == prohibited_set.end())
