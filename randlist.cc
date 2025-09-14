@@ -108,8 +108,7 @@ static std::set<unsigned> compute(const Inputs& inputs)
         }
         val = (scale * rand()) + 0.5;
         val += inputs.range[0];
-        if (prohibited_set.find(val) == prohibited_set.end())
-            final_set.insert(val);
+        final_set.insert(val);
     }
     return final_set;
 }
