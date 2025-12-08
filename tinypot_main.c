@@ -1,4 +1,4 @@
-static const char* version = "1.10.1";
+static const char* version = "2.0.0";
 
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -14,15 +14,16 @@ static const char* version = "1.10.1";
 
 int main(int argc, char* argv[])
 {
+    int do_shtup = false;
     int socketFD;
     int port_num;
     int index;
     char* listening_address_arg;
     int con_num;
     int iarg;
+    int num_ports, num_ports_requested;
     int* port_array;
     struct pollfd* pds;
-    int num_ports, num_ports_requested;
 
     printf("Program tinypot version %s\n", version);
     fflush(stdout);
@@ -32,14 +33,29 @@ int main(int argc, char* argv[])
     {
     case 1:
     case 2:
-        fprintf(stderr, "Usage: tinypot [address|-] portnum portnum ...\n");
+        fprintf(stderr,
+            "Usage: tinypot [-shtup] [address|-] portnum portnum ...\n");
         exit(EXIT_FAILURE);
         break;
     default:
-        listening_address_arg = argv[1];
         break;
     }
 
+    /* Process option, if any. */
+    if ((argv[1][0] == '-') && (argv[1][1] != '\0'))
+    {
+        if (strcmp("-shtup", argv[1]) != 0)
+        {
+            fprintf(stderr,
+                "Usage: tinypot [-shtup] [address|-] portnum portnum ...\n");
+            exit(EXIT_FAILURE);
+        }
+        do_shtup = true;
+        ++argv;
+        --argc;
+    }
+
+    listening_address_arg = argv[1];
     if (strcmp(listening_address_arg, "-") == 0)
     {
         listening_address_arg = "*";
@@ -165,7 +181,7 @@ int main(int argc, char* argv[])
                     pds[index].revents);
                 exit(EXIT_FAILURE);
             }
-            if (process_connection(++con_num, port_array[index],
+            if (process_connection(do_shtup, ++con_num, port_array[index],
                 pds[index].fd) != 0) exit(EXIT_FAILURE);
         }
     }

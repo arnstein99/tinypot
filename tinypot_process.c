@@ -1,6 +1,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
+#include <fcntl.h>
 #include <stdio.h>
 #include <pthread.h>
 #include <sys/types.h>
@@ -13,6 +14,7 @@
 #include "tinypot_process.h"
 static const unsigned long e9 =  1000000000;
 static const unsigned long e6 =  1000000;
+static const unsigned long shtup_max = e6;
 
 /* Delays will be uniformly distributed between 0 and this number of seconds */
 #define MY_MAX 10
@@ -29,7 +31,8 @@ struct Arg
     struct sockaddr_in addr;
 };
 
-static void* worker(void* arg);
+static void* login_worker(void* arg);
+static void* shtup_worker(void* arg);
 static void timestamp(FILE* fd, int con_num, int colon);
 static void my_sleep(void);
 static int timed_read(
@@ -38,8 +41,9 @@ static void subtractfrom(struct timeval* big, const struct timeval* small);
 
 static pthread_mutex_t print_mutex = PTHREAD_MUTEX_INITIALIZER;
 
-int process_connection(int con_num, int port_num, int socketFD)
+int process_connection(bool do_shtup, int con_num, int port_num, int socketFD)
 {
+    int retval;
     int optval;
     int connectFD;
     pthread_t thread_handle;
@@ -79,7 +83,10 @@ int process_connection(int con_num, int port_num, int socketFD)
     parg->connectFD = connectFD;
     parg->addr = addr;
 
-    if (pthread_create(&thread_handle, NULL, worker, (void*)parg) != 0)
+    retval = do_shtup                                                   ?
+        pthread_create(&thread_handle, NULL, shtup_worker, (void*)parg) :
+        pthread_create(&thread_handle, NULL, login_worker, (void*)parg) ;
+    if (retval != 0)
     {
         timestamp(stderr, parg->con_num, 0);
         perror("pthread_create failed");
@@ -96,7 +103,7 @@ int process_connection(int con_num, int port_num, int socketFD)
     return 0;
 }
 
-static void* worker(void* arg)
+static void* login_worker(void* arg)
 {
     char chr;
     int retval;
@@ -267,6 +274,81 @@ static void* worker(void* arg)
     fflush(stdout);
     pthread_mutex_unlock(&print_mutex);
     printing = 0;
+
+    /* This fails so often with "endpoint is not connected" that it is not
+     * interesting */
+    shutdown(parg->connectFD, SHUT_RDWR);
+    close(parg->connectFD);
+    fclose(writeFD);
+
+    free((void*)parg);
+    pthread_exit(NULL);
+}
+
+static void* shtup_worker(void* arg)
+{
+    char chr;
+    int rand_fd;
+    unsigned long shtup_count;
+    FILE* writeFD;
+    struct sockaddr_in local_sa;
+    socklen_t local_length = (socklen_t)sizeof(local_sa);
+    struct Arg* parg = (struct Arg*)arg;
+
+    /* Lock mutex early to keep connection numbers (con_num) in order. */
+    pthread_mutex_lock(&print_mutex);
+
+    if ((rand_fd = open("/dev/random", O_RDONLY)) < 0)
+    {
+        perror("open(/dev/random) failed");
+        close(parg->connectFD);
+        free((void*)parg);
+        pthread_mutex_unlock(&print_mutex);
+        pthread_exit(NULL);
+    }
+
+    if (getsockname(
+        parg->connectFD,(struct sockaddr*)(&local_sa), &local_length) == -1)
+    {
+        timestamp(stderr, parg->con_num, 0);
+        perror("getsockname failed");
+        close(parg->connectFD);
+        free((void*)parg);
+        pthread_mutex_unlock(&print_mutex);
+        pthread_exit(NULL);
+    }
+
+    if ((writeFD = fdopen(parg->connectFD, "w")) == NULL)
+    {
+        timestamp(stderr, parg->con_num, 0);
+        perror("fdopen failed");
+        close(parg->connectFD);
+        free((void*)parg);
+        pthread_mutex_unlock(&print_mutex);
+        pthread_exit(NULL);
+    }
+
+    timestamp(stdout, parg->con_num, 0);
+    printf("open connection %s -> ", inet_ntoa(parg->addr.sin_addr));
+    printf("%s:%d ",
+        inet_ntoa(local_sa.sin_addr), parg->port_num);
+    printf("SHTUP\n");
+
+    for (shtup_count = 0 ; shtup_count < shtup_max ; ++shtup_count)
+    {
+        if (read(rand_fd, &chr, 1) != 1)
+        {
+            perror("read(/dev/random) failed");
+            break;
+        }
+        if (putc(chr, writeFD) == EOF)
+            break;
+    }
+
+    timestamp(stdout, parg->con_num, 0);
+    fprintf(stdout, "close connection: %lu characters sent\n", shtup_count);
+    fflush(stdout);
+    pthread_mutex_unlock(&print_mutex);
 
     /* This fails so often with "endpoint is not connected" that it is not
      * interesting */
