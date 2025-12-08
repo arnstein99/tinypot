@@ -13,8 +13,9 @@
 #include <errno.h>
 #include "tinypot_process.h"
 static const unsigned long e9 =  1000000000;
+static const unsigned long e5 =  100000;
 static const unsigned long e6 =  1000000;
-static const unsigned long shtup_max = e6;
+static const unsigned long shtup_max = e9;
 
 /* Delays will be uniformly distributed between 0 and this number of seconds */
 #define MY_MAX 10
@@ -312,6 +313,7 @@ static void* shtup_worker(void* arg)
     {
         timestamp(stderr, parg->con_num, 0);
         perror("getsockname failed");
+        close(rand_fd);
         close(parg->connectFD);
         free((void*)parg);
         pthread_mutex_unlock(&print_mutex);
@@ -322,6 +324,7 @@ static void* shtup_worker(void* arg)
     {
         timestamp(stderr, parg->con_num, 0);
         perror("fdopen failed");
+        close(rand_fd);
         close(parg->connectFD);
         free((void*)parg);
         pthread_mutex_unlock(&print_mutex);
@@ -333,20 +336,35 @@ static void* shtup_worker(void* arg)
     printf("%s:%d ",
         inet_ntoa(local_sa.sin_addr), parg->port_num);
     printf("SHTUP\n");
+    pthread_mutex_unlock(&print_mutex);
 
     for (shtup_count = 0 ; shtup_count < shtup_max ; ++shtup_count)
     {
         if (read(rand_fd, &chr, 1) != 1)
         {
+            pthread_mutex_lock(&print_mutex);
+            timestamp(stdout, parg->con_num, 0);
             perror("read(/dev/random) failed");
+            pthread_mutex_unlock(&print_mutex);
             break;
         }
-        if (putc(chr, writeFD) == EOF)
+        if (write(parg->connectFD, &chr, 1) != 1)
             break;
+        if ((shtup_count != 0) && ((shtup_count % e5) == 0))
+        {
+            pthread_mutex_lock(&print_mutex);
+            timestamp(stdout, parg->con_num, 0);
+            printf("   ...   %lu bytes   ...\n", shtup_count);
+            fflush(stdout);
+            pthread_mutex_unlock(&print_mutex);
+            my_sleep();
+        }
+
     }
 
+    pthread_mutex_lock(&print_mutex);
     timestamp(stdout, parg->con_num, 0);
-    fprintf(stdout, "close connection: %lu characters sent\n", shtup_count);
+    fprintf(stdout, "close connection: %lu bytes sent\n", shtup_count);
     fflush(stdout);
     pthread_mutex_unlock(&print_mutex);
 
@@ -354,6 +372,7 @@ static void* shtup_worker(void* arg)
      * interesting */
     shutdown(parg->connectFD, SHUT_RDWR);
     close(parg->connectFD);
+    close(rand_fd);
     fclose(writeFD);
 
     free((void*)parg);
