@@ -15,10 +15,21 @@
 static const unsigned long e9 =  1000000000;
 static const unsigned long e5 =  100000;
 static const unsigned long e6 =  1000000;
+
+/*
+Tuning
+------
+*/
+
+/* Maximum number of bytes to shtup, each "client". */
 static const unsigned long shtup_max = e9;
+/* Controls breaks in shtup operation */
+static const unsigned long shtup_modulus = e5;
+/* Throttle for shtup, in seconds */
+static const unsigned long shtup_throttle = 9;
 
 /* Delays will be uniformly distributed between 0 and this number of seconds */
-#define MY_MAX 10
+static const unsigned  MY_MAX = 10;
 
 /* Seconds to wait before forcing a newline on output */
 #define LINE_WAIT 9
@@ -35,7 +46,7 @@ struct Arg
 static void* login_worker(void* arg);
 static void* shtup_worker(void* arg);
 static void timestamp(FILE* fd, int con_num, int colon);
-static void my_sleep(void);
+static void my_sleep(unsigned nsec);
 static int timed_read(
     int d, void* buf, size_t nbyte, const struct timeval* deadline);
 static void subtractfrom(struct timeval* big, const struct timeval* small);
@@ -154,7 +165,7 @@ static void* login_worker(void* arg)
     pthread_mutex_unlock(&print_mutex);
     printing = 0;
     finished = 0;
-    my_sleep();
+    my_sleep(MY_MAX);
     struct timeval deadline;
     gettimeofday(&deadline, NULL);
     deadline.tv_sec += LINE_WAIT;
@@ -243,7 +254,7 @@ static void* login_worker(void* arg)
             }
             ++iline;
             fflush(writeFD);
-            my_sleep();
+            my_sleep(MY_MAX);
             gettimeofday(&deadline, NULL);
             deadline.tv_sec += LINE_WAIT;
         }
@@ -288,8 +299,7 @@ static void* login_worker(void* arg)
 
 static void* shtup_worker(void* arg)
 {
-    char chr;
-    int rand_fd;
+    int rand_val;
     unsigned long shtup_count;
     FILE* writeFD;
     struct sockaddr_in local_sa;
@@ -299,21 +309,11 @@ static void* shtup_worker(void* arg)
     /* Lock mutex early to keep connection numbers (con_num) in order. */
     pthread_mutex_lock(&print_mutex);
 
-    if ((rand_fd = open("/dev/random", O_RDONLY)) < 0)
-    {
-        perror("open(/dev/random) failed");
-        close(parg->connectFD);
-        free((void*)parg);
-        pthread_mutex_unlock(&print_mutex);
-        pthread_exit(NULL);
-    }
-
     if (getsockname(
         parg->connectFD,(struct sockaddr*)(&local_sa), &local_length) == -1)
     {
         timestamp(stderr, parg->con_num, 0);
         perror("getsockname failed");
-        close(rand_fd);
         close(parg->connectFD);
         free((void*)parg);
         pthread_mutex_unlock(&print_mutex);
@@ -324,7 +324,6 @@ static void* shtup_worker(void* arg)
     {
         timestamp(stderr, parg->con_num, 0);
         perror("fdopen failed");
-        close(rand_fd);
         close(parg->connectFD);
         free((void*)parg);
         pthread_mutex_unlock(&print_mutex);
@@ -338,33 +337,44 @@ static void* shtup_worker(void* arg)
     printf("SHTUP\n");
     pthread_mutex_unlock(&print_mutex);
 
-    for (shtup_count = 0 ; shtup_count < shtup_max ; ++shtup_count)
+    for (shtup_count = 0 ; shtup_count < shtup_max ;
+         shtup_count += sizeof(int))
     {
-        if (read(rand_fd, &chr, 1) != 1)
-        {
-            pthread_mutex_lock(&print_mutex);
-            timestamp(stdout, parg->con_num, 0);
-            perror("read(/dev/random) failed");
-            pthread_mutex_unlock(&print_mutex);
+        rand_val = rand();
+        if (write(parg->connectFD, &rand_val, sizeof(int)) != sizeof(int))
             break;
-        }
-        if (write(parg->connectFD, &chr, 1) != 1)
-            break;
-        if ((shtup_count != 0) && ((shtup_count % e5) == 0))
+        if ((shtup_count != 0) && ((shtup_count % shtup_modulus) == 0))
         {
             pthread_mutex_lock(&print_mutex);
             timestamp(stdout, parg->con_num, 0);
             printf("   ...   %lu bytes   ...\n", shtup_count);
             fflush(stdout);
             pthread_mutex_unlock(&print_mutex);
-            my_sleep();
+            my_sleep(shtup_throttle);
         }
 
     }
 
     pthread_mutex_lock(&print_mutex);
     timestamp(stdout, parg->con_num, 0);
-    fprintf(stdout, "close connection: %lu bytes sent\n", shtup_count);
+    if (shtup_count >= 1000000)
+    {
+        /* Units of 100000 */
+        shtup_count = (shtup_count + 50000) / 100000;
+        unsigned long millions = shtup_count / 10;
+        unsigned long tenths   = shtup_count % 10;
+        fprintf(stdout, "close connection: %lu.%lum bytes sent\n",
+           millions, tenths);
+    }
+    else if (shtup_count >= 1000)
+    {
+        shtup_count = (shtup_count + 500) / 1000;
+        fprintf(stdout, "close connection: %luk bytes sent\n", shtup_count);
+    }
+    else
+    {
+        fprintf(stdout, "close connection: %lu bytes sent\n", shtup_count);
+    }
     fflush(stdout);
     pthread_mutex_unlock(&print_mutex);
 
@@ -372,7 +382,6 @@ static void* shtup_worker(void* arg)
      * interesting */
     shutdown(parg->connectFD, SHUT_RDWR);
     close(parg->connectFD);
-    close(rand_fd);
     fclose(writeFD);
 
     free((void*)parg);
@@ -402,10 +411,9 @@ char* my_time(void)
     return &buf[0];
 }
 
-static void my_sleep(void)
+static void my_sleep(unsigned nsec)
 {
-    static const double my_scale = (double)MY_MAX / RAND_MAX;
-    double  sleep_time = my_scale * rand();
+    double sleep_time = ( (double)rand() / RAND_MAX ) * nsec;
     struct timespec tv, rem;
     tv.tv_sec = sleep_time;
     tv.tv_nsec = e9 * (sleep_time - tv.tv_sec);
