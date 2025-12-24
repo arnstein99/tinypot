@@ -26,10 +26,10 @@ static const unsigned long shtup_max = e9;
 /* Controls breaks in shtup operation */
 static const unsigned long shtup_modulus = e5;
 /* Throttle for shtup, in seconds */
-static const unsigned long shtup_throttle = 9;
+static const unsigned long shtup_throttle = 12;
 
 /* Delays will be uniformly distributed between 0 and this number of seconds */
-static const unsigned  MY_MAX = 10;
+static const unsigned  MY_MAX = 14;
 
 /* Seconds to wait before forcing a newline on output */
 #define LINE_WAIT 9
