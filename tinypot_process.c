@@ -11,6 +11,7 @@
 #include <arpa/inet.h>
 #include <time.h>
 #include <errno.h>
+#include "tinypot_counter.h"
 #include "tinypot_process.h"
 static const unsigned long e9 =  1000000000;
 static const unsigned long e5 =  100000;
@@ -24,9 +25,9 @@ Tuning
 /* Maximum number of bytes to shtup, each "client". */
 static const unsigned long shtup_max = e9;
 /* Controls breaks in shtup operation */
-static const unsigned long shtup_modulus = e5;
-/* Throttle for shtup, in seconds */
-static const unsigned long shtup_throttle = 12;
+static const unsigned long shtup_modulus = e5/2;
+/* Throttle for shtup, per client, in seconds */
+static const unsigned long shtup_throttle = 9;
 
 /* Delays will be uniformly distributed between 0 and this number of seconds */
 static const unsigned  MY_MAX = 14;
@@ -306,6 +307,9 @@ static void* shtup_worker(void* arg)
     socklen_t local_length = (socklen_t)sizeof(local_sa);
     struct Arg* parg = (struct Arg*)arg;
 
+    /* Accounting */
+    counter_increment(1);
+
     /* Lock mutex early to keep connection numbers (con_num) in order. */
     pthread_mutex_lock(&print_mutex);
 
@@ -317,6 +321,7 @@ static void* shtup_worker(void* arg)
         close(parg->connectFD);
         free((void*)parg);
         pthread_mutex_unlock(&print_mutex);
+        counter_increment(-1);
         pthread_exit(NULL);
     }
 
@@ -327,6 +332,7 @@ static void* shtup_worker(void* arg)
         close(parg->connectFD);
         free((void*)parg);
         pthread_mutex_unlock(&print_mutex);
+        counter_increment(-1);
         pthread_exit(NULL);
     }
 
@@ -350,7 +356,7 @@ static void* shtup_worker(void* arg)
             printf("   ...   %lu bytes   ...\n", shtup_count);
             fflush(stdout);
             pthread_mutex_unlock(&print_mutex);
-            my_sleep(shtup_throttle);
+            my_sleep(shtup_throttle * counter_get());
         }
 
     }
@@ -363,17 +369,19 @@ static void* shtup_worker(void* arg)
         shtup_count = (shtup_count + 50000) / 100000;
         unsigned long millions = shtup_count / 10;
         unsigned long tenths   = shtup_count % 10;
-        fprintf(stdout, "close connection: %lu.%lum bytes sent\n",
-           millions, tenths);
+        fprintf(stdout, "close connection: %lu.%lum bytes sent (%d)\n",
+           millions, tenths, counter_get());
     }
     else if (shtup_count >= 1000)
     {
         shtup_count = (shtup_count + 500) / 1000;
-        fprintf(stdout, "close connection: %luk bytes sent\n", shtup_count);
+        fprintf(stdout, "close connection: %luk bytes sent (%d)\n",
+            shtup_count, counter_get());
     }
     else
     {
-        fprintf(stdout, "close connection: %lu bytes sent\n", shtup_count);
+        fprintf(stdout, "close connection: %lu bytes sent (%d)\n",
+            shtup_count, counter_get());
     }
     fflush(stdout);
     pthread_mutex_unlock(&print_mutex);
@@ -385,6 +393,7 @@ static void* shtup_worker(void* arg)
     fclose(writeFD);
 
     free((void*)parg);
+    counter_increment(-1);
     pthread_exit(NULL);
 }
 
