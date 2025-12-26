@@ -18,7 +18,7 @@ static const unsigned long e5 =  100000;
 static const unsigned long e6 =  1000000;
 
 /*
-Tuning
+shtup tuning
 ------
 */
 
@@ -27,7 +27,9 @@ static const unsigned long shtup_max = e9;
 /* Controls breaks in shtup operation */
 static const unsigned long shtup_modulus = e5/2;
 /* Throttle for shtup, per client, in seconds */
-static const unsigned long shtup_throttle = 9;
+static const unsigned long shtup_throttle = 2;
+/* Timeout for writing, in seconds. */
+static const unsigned shtup_max_wait = 30;
 
 /* Delays will be uniformly distributed between 0 and this number of seconds */
 static const unsigned  MY_MAX = 14;
@@ -48,8 +50,12 @@ static void* login_worker(void* arg);
 static void* shtup_worker(void* arg);
 static void timestamp(FILE* fd, int con_num, int colon);
 static void my_sleep(unsigned nsec);
+/* Note that the semantics of last argument are different
+ * across the next two functions */
 static int timed_read(
     int d, void* buf, size_t nbyte, const struct timeval* deadline);
+static int timed_write(
+    int d, void* buf, size_t nbyte, int wait_time);
 static void subtractfrom(struct timeval* big, const struct timeval* small);
 
 static pthread_mutex_t print_mutex = PTHREAD_MUTEX_INITIALIZER;
@@ -130,7 +136,7 @@ static void* login_worker(void* arg)
                           * NO OTHER CONDITIONS ALLOWED.
                           */
     int iline = 0;
-    int finished;
+    bool finished;
 
     /* Lock mutex early to keep connection numbers (con_num) in order. */
     pthread_mutex_lock(&print_mutex);
@@ -165,7 +171,7 @@ static void* login_worker(void* arg)
     fflush(stdout);
     pthread_mutex_unlock(&print_mutex);
     printing = 0;
-    finished = 0;
+    finished = false;
     my_sleep(MY_MAX);
     struct timeval deadline;
     gettimeofday(&deadline, NULL);
@@ -179,14 +185,14 @@ static void* login_worker(void* arg)
         {
         case 0:
             /* Got no character */
-            finished = 1;
+            finished = true;
             break;
         case 1:
             /* Got a character, keep going */
             break;
         case -1:
             /* Read error */
-            finished = 1;
+            finished = true;
             break;
         case -2:
             /* timeout */
@@ -215,7 +221,7 @@ static void* login_worker(void* arg)
             default:
                 fprintf(stderr, "Programming error, printing.\n");
                 fflush(stderr);
-                finished = 1;
+                finished = true;
                 break;
             }
             printing = 0;
@@ -224,7 +230,7 @@ static void* login_worker(void* arg)
         default:
             fprintf(stderr, "Programming error, read.\n");
             fflush(stderr);
-            finished = 1;
+            finished = true;
             break;
         }
         if (finished) break;
@@ -300,12 +306,13 @@ static void* login_worker(void* arg)
 
 static void* shtup_worker(void* arg)
 {
+    int retval;
     int rand_val;
     unsigned long shtup_count;
-    FILE* writeFD;
     struct sockaddr_in local_sa;
     socklen_t local_length = (socklen_t)sizeof(local_sa);
     struct Arg* parg = (struct Arg*)arg;
+    int wait_time = 1000 * shtup_max_wait;
 
     /* Accounting */
     counter_increment(1);
@@ -325,17 +332,6 @@ static void* shtup_worker(void* arg)
         pthread_exit(NULL);
     }
 
-    if ((writeFD = fdopen(parg->connectFD, "w")) == NULL)
-    {
-        timestamp(stderr, parg->con_num, 0);
-        perror("fdopen failed");
-        close(parg->connectFD);
-        free((void*)parg);
-        pthread_mutex_unlock(&print_mutex);
-        counter_increment(-1);
-        pthread_exit(NULL);
-    }
-
     timestamp(stdout, parg->con_num, 0);
     printf("open connection %s -> ", inet_ntoa(parg->addr.sin_addr));
     printf("%s:%d ",
@@ -343,22 +339,54 @@ static void* shtup_worker(void* arg)
     printf("SHTUP\n");
     pthread_mutex_unlock(&print_mutex);
 
-    for (shtup_count = 0 ; shtup_count < shtup_max ;
-         shtup_count += sizeof(int))
+    for (shtup_count = 0 ; shtup_count < shtup_max ; )
     {
-        rand_val = rand();
-        if (write(parg->connectFD, &rand_val, sizeof(int)) != sizeof(int))
-            break;
-        if ((shtup_count != 0) && ((shtup_count % shtup_modulus) == 0))
+        if ((shtup_count % shtup_modulus) == 0)
         {
+            my_sleep(shtup_throttle * counter_get());
             pthread_mutex_lock(&print_mutex);
             timestamp(stdout, parg->con_num, 0);
             printf("   ...   %lu bytes   ...\n", shtup_count);
             fflush(stdout);
             pthread_mutex_unlock(&print_mutex);
-            my_sleep(shtup_throttle * counter_get());
         }
 
+        rand_val = rand();
+        retval = timed_write(
+            parg->connectFD, &rand_val, sizeof(rand_val), wait_time);
+        if (retval <= 0)
+        {
+            switch (retval)
+            {
+            case 0:
+                /* Put no data */
+                break;
+            case -1:
+                /* Write error */
+                break;
+            case -2:
+                /* timeout */
+                break;
+            default:
+                fprintf(stderr, "Programming error, write.\n");
+                fflush(stderr);
+                break;
+            }
+            if (retval != -1)
+            {
+                pthread_mutex_lock(&print_mutex);
+                timestamp(stdout, parg->con_num, 0);
+                printf("Break for retval %d\n", retval);
+                pthread_mutex_unlock(&print_mutex);
+                break;
+            }
+            /* This client is finished */
+            break;
+        }
+        else
+        {
+            shtup_count += retval;
+        }
     }
 
     pthread_mutex_lock(&print_mutex);
@@ -390,8 +418,6 @@ static void* shtup_worker(void* arg)
      * interesting */
     shutdown(parg->connectFD, SHUT_RDWR);
     close(parg->connectFD);
-    fclose(writeFD);
-
     free((void*)parg);
     counter_increment(-1);
     pthread_exit(NULL);
@@ -430,6 +456,41 @@ static void my_sleep(unsigned nsec)
     {
         tv = rem;
     }
+}
+
+static int timed_write(
+    int d, void* buf, size_t nbyte, int wait_time)
+{
+    int status;
+    int retval;
+
+    struct pollfd pfd;
+    memset(&pfd, 0, sizeof(pfd));
+    pfd.fd = d;
+    pfd.events = POLLOUT;
+    status = poll(&pfd, 1, wait_time);
+    switch(status)
+    {
+    case 0:
+        /* timeout */
+        retval = -2;
+        break;
+    case 1:
+        /* A character can be sent */
+        if (!(pfd.revents & POLLOUT))
+        {
+            fprintf(stderr, "Unexpected revents value %d (2)\n",
+                pfd.revents);
+            exit(1);
+        }
+        /* Programming note: POLLHUP and POLLERR are ignored here. */
+        retval = write(d, buf, nbyte);
+        break;
+    default:
+        retval = -3;
+        break;
+    }
+    return retval;
 }
 
 static int timed_read(

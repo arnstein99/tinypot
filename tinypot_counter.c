@@ -13,6 +13,7 @@ void counter_increment(int delta)
     if (process_counter < 0)
     {
         fprintf(stderr, "Programming error in process counter\n");
+        pthread_mutex_unlock(&counter_mutex);
         exit(1);
     }
     pthread_mutex_unlock(&counter_mutex);
