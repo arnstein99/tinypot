@@ -27,9 +27,11 @@ static const unsigned long shtup_max = e9;
 /* Controls breaks in shtup operation */
 static const unsigned long shtup_modulus = e5/2;
 /* Throttle for shtup, per client, in seconds */
-static const unsigned long shtup_throttle = 2;
+static const double shtup_throttle = 0.5;
 /* Timeout for writing, in seconds. */
 static const unsigned shtup_max_wait = 30;
+/* Max kernel buffer for writing */
+static const int shtup_sndbuf = 4096;
 
 /* Delays will be uniformly distributed between 0 and this number of seconds */
 static const unsigned  MY_MAX = 14;
@@ -49,7 +51,7 @@ struct Arg
 static void* login_worker(void* arg);
 static void* shtup_worker(void* arg);
 static void timestamp(FILE* fd, int con_num, int colon);
-static void my_sleep(unsigned nsec);
+static void my_sleep(double nsec);
 /* Note that the semantics of last argument are different
  * across the next two functions */
 static int timed_read(
@@ -287,9 +289,9 @@ static void* login_worker(void* arg)
         printing = 1;
     }
     if (retval == -1)
-        fprintf(stdout, "close connection: %s\n", strerror(errno));
+        printf("close connection: %s\n", strerror(errno));
     else
-        fprintf(stdout, "close connection: end of file\n");
+        printf("close connection: end of file\n");
     fflush(stdout);
     pthread_mutex_unlock(&print_mutex);
     printing = 0;
@@ -314,6 +316,20 @@ static void* shtup_worker(void* arg)
     struct Arg* parg = (struct Arg*)arg;
     int wait_time = 1000 * shtup_max_wait;
 
+    /* Limit kernel buffering */
+    if (
+        setsockopt(
+            parg->connectFD, SOL_SOCKET, SO_SNDBUF, &shtup_sndbuf,
+            sizeof(shtup_sndbuf))
+        != 0)
+    {
+        timestamp(stderr, parg->con_num, 0);
+        perror("setsockopt(SO_SNDBUF)");
+        close(parg->connectFD);
+        free((void*)parg);
+        pthread_exit(NULL);
+    }
+
     /* Accounting */
     counter_increment(1);
 
@@ -334,9 +350,8 @@ static void* shtup_worker(void* arg)
 
     timestamp(stdout, parg->con_num, 0);
     printf("open connection %s -> ", inet_ntoa(parg->addr.sin_addr));
-    printf("%s:%d ",
+    printf("%s:%d\n",
         inet_ntoa(local_sa.sin_addr), parg->port_num);
-    printf("SHTUP\n");
     pthread_mutex_unlock(&print_mutex);
 
     for (shtup_count = 0 ; shtup_count < shtup_max ; )
@@ -397,20 +412,18 @@ static void* shtup_worker(void* arg)
         shtup_count = (shtup_count + 50000) / 100000;
         unsigned long millions = shtup_count / 10;
         unsigned long tenths   = shtup_count % 10;
-        fprintf(stdout, "close connection: %lu.%lum bytes sent (%d)\n",
-           millions, tenths, counter_get());
+        printf("close connection: %lu.%lum bytes sent ", millions, tenths);
     }
     else if (shtup_count >= 1000)
     {
         shtup_count = (shtup_count + 500) / 1000;
-        fprintf(stdout, "close connection: %luk bytes sent (%d)\n",
-            shtup_count, counter_get());
+        printf("close connection: %luk bytes sent ", shtup_count);
     }
     else
     {
-        fprintf(stdout, "close connection: %lu bytes sent (%d)\n",
-            shtup_count, counter_get());
+        printf("close connection: %lu bytes sent ", shtup_count);
     }
+    printf("(%d)\n", counter_get() - 1);
     fflush(stdout);
     pthread_mutex_unlock(&print_mutex);
 
@@ -446,7 +459,7 @@ char* my_time(void)
     return &buf[0];
 }
 
-static void my_sleep(unsigned nsec)
+static void my_sleep(double nsec)
 {
     double sleep_time = ( (double)rand() / RAND_MAX ) * nsec;
     struct timespec tv, rem;
