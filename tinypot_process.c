@@ -27,11 +27,11 @@ static const unsigned long shtup_max = e9;
 /* Controls breaks in shtup operation */
 static const unsigned long shtup_modulus = e5/2;
 /* Throttle for shtup, per client, in seconds */
-static const double shtup_throttle = 0.5;
+static const double shtup_throttle = 0.25;
 /* Timeout for writing, in seconds. */
 static const unsigned shtup_max_wait = 30;
 /* Max kernel buffer for writing */
-static const int shtup_sndbuf = 4096;
+static const int shtup_sndbuf = 2048;
 
 /* Delays will be uniformly distributed between 0 and this number of seconds */
 static const unsigned  MY_MAX = 14;
@@ -140,6 +140,9 @@ static void* login_worker(void* arg)
     int iline = 0;
     bool finished;
 
+    /* Accounting */
+    counter_increment(1);
+
     /* Lock mutex early to keep connection numbers (con_num) in order. */
     pthread_mutex_lock(&print_mutex);
 
@@ -151,6 +154,7 @@ static void* login_worker(void* arg)
         close(parg->connectFD);
         free((void*)parg);
         pthread_mutex_unlock(&print_mutex);
+        counter_increment(-1);
         pthread_exit(NULL);
     }
 
@@ -161,6 +165,7 @@ static void* login_worker(void* arg)
         close(parg->connectFD);
         free((void*)parg);
         pthread_mutex_unlock(&print_mutex);
+        counter_increment(-1);
         pthread_exit(NULL);
     }
 
@@ -288,10 +293,12 @@ static void* login_worker(void* arg)
         timestamp(stdout, parg->con_num, 0);
         printing = 1;
     }
+    printf("close connection: ");
     if (retval == -1)
-        printf("close connection: %s\n", strerror(errno));
+        printf("%s", strerror(errno));
     else
-        printf("close connection: end of file\n");
+        printf("end of file");
+    printf(" (%d)\n", counter_get() - 1);
     fflush(stdout);
     pthread_mutex_unlock(&print_mutex);
     printing = 0;
@@ -303,6 +310,7 @@ static void* login_worker(void* arg)
     fclose(writeFD);
 
     free((void*)parg);
+    counter_increment(-1);
     pthread_exit(NULL);
 }
 
@@ -406,24 +414,25 @@ static void* shtup_worker(void* arg)
 
     pthread_mutex_lock(&print_mutex);
     timestamp(stdout, parg->con_num, 0);
+    printf("close connection: ");
     if (shtup_count >= 1000000)
     {
         /* Units of 100000 */
         shtup_count = (shtup_count + 50000) / 100000;
         unsigned long millions = shtup_count / 10;
         unsigned long tenths   = shtup_count % 10;
-        printf("close connection: %lu.%lum bytes sent ", millions, tenths);
+        printf("%lu.%lum bytes sent", millions, tenths);
     }
     else if (shtup_count >= 1000)
     {
         shtup_count = (shtup_count + 500) / 1000;
-        printf("close connection: %luk bytes sent ", shtup_count);
+        printf("%luk bytes sent", shtup_count);
     }
     else
     {
-        printf("close connection: %lu bytes sent ", shtup_count);
+        printf("%lu bytes sent", shtup_count);
     }
-    printf("(%d)\n", counter_get() - 1);
+    printf(" (%d)\n", counter_get() - 1);
     fflush(stdout);
     pthread_mutex_unlock(&print_mutex);
 
