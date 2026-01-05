@@ -27,7 +27,7 @@ static const unsigned long shtup_max = e9;
 /* Controls breaks in shtup operation */
 static const unsigned long shtup_modulus = e5/2;
 /* Throttle for shtup, per client, in seconds */
-static const double shtup_throttle = 0.375;
+static const double shtup_throttle = 0.825;
 /* Timeout for writing, in seconds. */
 static const unsigned shtup_max_wait = 30;
 /* Max kernel buffer for writing */
