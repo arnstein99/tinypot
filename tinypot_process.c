@@ -492,6 +492,7 @@ static int timed_write(
     int status;
     int retval;
 
+
     struct pollfd pfd;
     memset(&pfd, 0, sizeof(pfd));
     pfd.fd = d;
@@ -505,7 +506,15 @@ static int timed_write(
         break;
     case 1:
         /* A character can be sent */
-        if (!(pfd.revents & POLLOUT))
+        if (pfd.revents & POLLNVAL)
+        {
+            fprintf(stderr,
+                "Warning: file descriptor closed unexpectedly (POLLNVAL) (2)\n"
+                );
+            retval = -2;
+            break;
+        }
+        else if (!(pfd.revents & POLLOUT))
         {
             fprintf(stderr, "Unexpected revents value %d (2)\n",
                 pfd.revents);
@@ -549,9 +558,17 @@ static int timed_read(
         break;
     case 1:
         /* A character should be available */
-        if (!(pfd.revents & POLLIN))
+        if (pfd.revents & POLLNVAL)
         {
-            fprintf(stderr, "Unexpected revents value %d (2)\n",
+            fprintf(stderr,
+                "Warning: file descriptor closed unexpectedly (POLLNVAL) (3)\n"
+                );
+            retval = -2;
+            break;
+        }
+        else if (!(pfd.revents & POLLIN))
+        {
+            fprintf(stderr, "Unexpected revents value %d (3)\n",
                 pfd.revents);
             exit(1);
         }

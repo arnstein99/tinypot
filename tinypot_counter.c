@@ -19,7 +19,7 @@ void counter_increment(int delta)
     pthread_mutex_unlock(&counter_mutex);
 }
 
-int counter_get()
+int counter_get(void)
 {
     int retval;
     pthread_mutex_lock(&counter_mutex);
