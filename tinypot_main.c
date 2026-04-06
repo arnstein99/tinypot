@@ -1,4 +1,4 @@
-static const char* version = "2.3.5";
+static const char* version = "2.3.6";
 
 #include <sys/types.h>
 #include <sys/socket.h>
