@@ -91,8 +91,8 @@ int process_connection(bool do_shtup, int con_num, int port_num, int socketFD)
     connectFD = accept(socketFD,(struct sockaddr*)(&addr), &addrlen);
     if (0 > connectFD)
     {
-        timestamp(stderr, parg->con_num, 0);
-        perror("accept failed");
+        timestamp(stderr, con_num, 0);
+        perror("Warning: accept failed");
         free((void*)parg);
         if(errno == EMFILE) return 1;
         return 0;

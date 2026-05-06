@@ -1,4 +1,4 @@
-static const char* version = "2.3.6";
+static const char* version = "2.3.7";
 
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -182,7 +182,16 @@ int main(int argc, char* argv[])
                 exit(EXIT_FAILURE);
             }
             if (process_connection(do_shtup, ++con_num, port_array[index],
-                pds[index].fd) != 0) exit(EXIT_FAILURE);
+                pds[index].fd) != 0)
+            {
+                /* Too many open files, probably. */
+                for ( ; index < num_ports ; ++index)
+                {
+                    if (pds[index].revents == 0) continue;
+                    close(port_array[index]);
+                }
+                sleep(5);
+            }
         }
     }
 
