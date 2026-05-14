@@ -6,7 +6,7 @@ This is a very simple honeypot program. It displays a login: prompt, followed by
 ## Building tinypot
 Just issue this command:
 ```
-$ gcc -pthread tinypot_main.c  tinypot_process.c tinypot_counter.c  -o tinypot
+$ gcc -pthread tinypot_main.c tinypot_process.c tinypot_counter.c -o tinypot
 ```
 
 ## Executing tinypot
