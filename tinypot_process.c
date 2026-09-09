@@ -514,13 +514,7 @@ static int timed_write(
             retval = -2;
             break;
         }
-        else if (!(pfd.revents & POLLOUT))
-        {
-            fprintf(stderr, "Unexpected revents value %d (2)\n",
-                pfd.revents);
-            exit(1);
-        }
-        /* Programming note: POLLHUP and POLLERR are ignored here. */
+        /* Programming note: POLLOUT, POLLHUP and POLLERR are ignored here. */
         retval = write(d, buf, nbyte);
         break;
     default:
