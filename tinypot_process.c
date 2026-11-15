@@ -19,7 +19,6 @@ static const unsigned long e6 =  1000000;
 
 /*
 shtup tuning
-------
 */
 
 /* Maximum number of bytes to shtup, each "client". */
@@ -141,9 +140,8 @@ static void* login_worker(void* arg)
     int iline = 0;
     bool finished;
 
-    /* Accounting */
-    counter_increment(1);
-    client_count = counter_get();
+    /* Accounting, including a semaphore hold. */
+    counter_request();
 
     /* Lock mutex early to keep connection numbers (con_num) in order. */
     pthread_mutex_lock(&print_mutex);
@@ -156,7 +154,7 @@ static void* login_worker(void* arg)
         close(parg->connectFD);
         free((void*)parg);
         pthread_mutex_unlock(&print_mutex);
-        counter_increment(-1);
+        counter_release();
         pthread_exit(NULL);
     }
 
@@ -167,7 +165,7 @@ static void* login_worker(void* arg)
         close(parg->connectFD);
         free((void*)parg);
         pthread_mutex_unlock(&print_mutex);
-        counter_increment(-1);
+        counter_release();
         pthread_exit(NULL);
     }
 
@@ -175,6 +173,7 @@ static void* login_worker(void* arg)
     fflush(writeFD);
     timestamp(stdout, parg->con_num, 0);
     printf("open cnxn %s -> ", inet_ntoa(parg->addr.sin_addr));
+    client_count = counter_query();
     printf("%s:%d (%d)\n",
         inet_ntoa(local_sa.sin_addr), parg->port_num, client_count);
     fflush(stdout);
@@ -289,7 +288,6 @@ static void* login_worker(void* arg)
         pthread_mutex_unlock(&print_mutex);
         printing = 0;
     }
-    client_count = counter_get() - 1;
     if (printing == 0)
     {
         pthread_mutex_lock(&print_mutex);
@@ -301,6 +299,7 @@ static void* login_worker(void* arg)
         printf("%s", strerror(errno));
     else
         printf("end of file");
+    client_count = counter_query() - 1;
     printf(" (%d)\n", client_count);
     fflush(stdout);
     pthread_mutex_unlock(&print_mutex);
@@ -313,7 +312,7 @@ static void* login_worker(void* arg)
     fclose(writeFD);
 
     free((void*)parg);
-    counter_increment(-1);
+    counter_release();
     pthread_exit(NULL);
 }
 
@@ -342,9 +341,8 @@ static void* shtup_worker(void* arg)
         pthread_exit(NULL);
     }
 
-    /* Accounting */
-    counter_increment(1);
-    client_count = counter_get();
+    /* Accounting, including a semaphore hold. */
+    counter_request();
 
     /* Lock mutex early to keep connection numbers (con_num) in order. */
     pthread_mutex_lock(&print_mutex);
@@ -357,12 +355,13 @@ static void* shtup_worker(void* arg)
         close(parg->connectFD);
         free((void*)parg);
         pthread_mutex_unlock(&print_mutex);
-        counter_increment(-1);
+        counter_release();
         pthread_exit(NULL);
     }
 
     timestamp(stdout, parg->con_num, 0);
     printf("open cnxn %s -> ", inet_ntoa(parg->addr.sin_addr));
+    client_count = counter_query();
     printf("%s:%d (%d)\n",
         inet_ntoa(local_sa.sin_addr), parg->port_num, client_count);
     pthread_mutex_unlock(&print_mutex);
@@ -371,7 +370,7 @@ static void* shtup_worker(void* arg)
     {
         if ((shtup_count % shtup_modulus) == 0)
         {
-            my_sleep(shtup_throttle * counter_get());
+            my_sleep(shtup_throttle * counter_query());
             pthread_mutex_lock(&print_mutex);
             timestamp(stdout, parg->con_num, 0);
             printf("   ...   %lu bytes   ...\n", shtup_count);
@@ -417,7 +416,6 @@ static void* shtup_worker(void* arg)
         }
     }
 
-    client_count = counter_get() - 1;
     pthread_mutex_lock(&print_mutex);
     timestamp(stdout, parg->con_num, 0);
     printf("close cnxn: ");
@@ -438,6 +436,7 @@ static void* shtup_worker(void* arg)
     {
         printf("%lu bytes sent", shtup_count);
     }
+    client_count = counter_query() - 1;
     printf(" (%d)\n", client_count);
     fflush(stdout);
     pthread_mutex_unlock(&print_mutex);
@@ -447,7 +446,7 @@ static void* shtup_worker(void* arg)
     shutdown(parg->connectFD, SHUT_RDWR);
     close(parg->connectFD);
     free((void*)parg);
-    counter_increment(-1);
+    counter_release();
     pthread_exit(NULL);
 }
 

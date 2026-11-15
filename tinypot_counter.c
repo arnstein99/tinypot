@@ -1,29 +1,48 @@
-#include <pthread.h>
+#include <semaphore.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include "tinypot_counter.h"
 
-static pthread_mutex_t counter_mutex = PTHREAD_MUTEX_INITIALIZER;
-static int process_counter = 0;
+static sem_t sem;
+static unsigned int max_count;
 
-void counter_increment(int delta)
+void counter_init(unsigned int count)
 {
-    pthread_mutex_lock(&counter_mutex);
-    process_counter += delta;
-    if (process_counter < 0)
+    max_count = count;
+    if (sem_init(&sem, 0, count) != 0)
     {
-        fprintf(stderr, "Programming error in process counter\n");
-        pthread_mutex_unlock(&counter_mutex);
+        perror("sem_init");
         exit(1);
     }
-    pthread_mutex_unlock(&counter_mutex);
 }
 
-int counter_get(void)
+void counter_request(void)
+{
+    if (sem_wait(&sem) != 0)
+    {
+        perror("sem_wait");
+        exit(1);
+    }
+}
+
+void counter_release(void)
+{
+    if (sem_post(&sem) != 0)
+    {
+        perror("sem_post");
+        exit(1);
+    }
+}
+
+int counter_query(void)
 {
     int retval;
-    pthread_mutex_lock(&counter_mutex);
-    retval = process_counter;
-    pthread_mutex_unlock(&counter_mutex);
+    if(sem_getvalue(&sem, &retval) != 0)
+    {
+        perror("sem_getvalue");
+        exit(1);
+    }
+    if (retval < 0) retval = 0;
+    retval = max_count - retval;
     return retval;
 }

@@ -1,4 +1,4 @@
-static const char* version = "2.3.8";
+static const char* version = "2.4.0";
 
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -10,7 +10,13 @@ static const char* version = "2.3.8";
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include "tinypot_counter.h"
 #include "tinypot_process.h"
+
+/*
+maximum client tuning
+*/
+static const unsigned int Max_Connections = 64;
 
 int main(int argc, char* argv[])
 {
@@ -148,6 +154,8 @@ int main(int argc, char* argv[])
         pds[num_ports].events = POLLIN;
         ++num_ports;
     }
+
+    counter_init(Max_Connections);
 
     /* Print opening message */
     printf("%s Listening on address %s, %d TCP/IP ports:\n",
