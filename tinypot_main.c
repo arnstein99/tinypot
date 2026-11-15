@@ -1,4 +1,4 @@
-static const char* version = "2.4.0";
+static const char* version = "work_in_progress";
 
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -17,6 +17,8 @@ static const char* version = "2.4.0";
 maximum client tuning
 */
 static const unsigned int Max_Connections = 64;
+
+counter_control* ccm;
 
 int main(int argc, char* argv[])
 {
@@ -155,7 +157,7 @@ int main(int argc, char* argv[])
         ++num_ports;
     }
 
-    counter_init(Max_Connections);
+    ccm = ccounter_init(Max_Connections);
 
     /* Print opening message */
     printf("%s Listening on address %s, %d TCP/IP ports:\n",

@@ -141,7 +141,7 @@ static void* login_worker(void* arg)
     bool finished;
 
     /* Accounting, including a semaphore hold. */
-    counter_request();
+    ccounter_request(ccm);
 
     /* Lock mutex early to keep connection numbers (con_num) in order. */
     pthread_mutex_lock(&print_mutex);
@@ -154,7 +154,7 @@ static void* login_worker(void* arg)
         close(parg->connectFD);
         free((void*)parg);
         pthread_mutex_unlock(&print_mutex);
-        counter_release();
+        ccounter_release(ccm);
         pthread_exit(NULL);
     }
 
@@ -165,7 +165,7 @@ static void* login_worker(void* arg)
         close(parg->connectFD);
         free((void*)parg);
         pthread_mutex_unlock(&print_mutex);
-        counter_release();
+        ccounter_release(ccm);
         pthread_exit(NULL);
     }
 
@@ -173,7 +173,7 @@ static void* login_worker(void* arg)
     fflush(writeFD);
     timestamp(stdout, parg->con_num, 0);
     printf("open cnxn %s -> ", inet_ntoa(parg->addr.sin_addr));
-    client_count = counter_query();
+    client_count = ccounter_query(ccm);
     printf("%s:%d (%d)\n",
         inet_ntoa(local_sa.sin_addr), parg->port_num, client_count);
     fflush(stdout);
@@ -299,7 +299,7 @@ static void* login_worker(void* arg)
         printf("%s", strerror(errno));
     else
         printf("end of file");
-    client_count = counter_query() - 1;
+    client_count = ccounter_query(ccm) - 1;
     printf(" (%d)\n", client_count);
     fflush(stdout);
     pthread_mutex_unlock(&print_mutex);
@@ -312,7 +312,7 @@ static void* login_worker(void* arg)
     fclose(writeFD);
 
     free((void*)parg);
-    counter_release();
+    ccounter_release(ccm);
     pthread_exit(NULL);
 }
 
@@ -342,7 +342,7 @@ static void* shtup_worker(void* arg)
     }
 
     /* Accounting, including a semaphore hold. */
-    counter_request();
+    ccounter_request(ccm);
 
     /* Lock mutex early to keep connection numbers (con_num) in order. */
     pthread_mutex_lock(&print_mutex);
@@ -355,13 +355,13 @@ static void* shtup_worker(void* arg)
         close(parg->connectFD);
         free((void*)parg);
         pthread_mutex_unlock(&print_mutex);
-        counter_release();
+        ccounter_release(ccm);
         pthread_exit(NULL);
     }
 
     timestamp(stdout, parg->con_num, 0);
     printf("open cnxn %s -> ", inet_ntoa(parg->addr.sin_addr));
-    client_count = counter_query();
+    client_count = ccounter_query(ccm);
     printf("%s:%d (%d)\n",
         inet_ntoa(local_sa.sin_addr), parg->port_num, client_count);
     pthread_mutex_unlock(&print_mutex);
@@ -370,7 +370,7 @@ static void* shtup_worker(void* arg)
     {
         if ((shtup_count % shtup_modulus) == 0)
         {
-            my_sleep(shtup_throttle * counter_query());
+            my_sleep(shtup_throttle * ccounter_query(ccm));
             pthread_mutex_lock(&print_mutex);
             timestamp(stdout, parg->con_num, 0);
             printf("   ...   %lu bytes   ...\n", shtup_count);
@@ -436,7 +436,7 @@ static void* shtup_worker(void* arg)
     {
         printf("%lu bytes sent", shtup_count);
     }
-    client_count = counter_query() - 1;
+    client_count = ccounter_query(ccm) - 1;
     printf(" (%d)\n", client_count);
     fflush(stdout);
     pthread_mutex_unlock(&print_mutex);
@@ -446,7 +446,7 @@ static void* shtup_worker(void* arg)
     shutdown(parg->connectFD, SHUT_RDWR);
     close(parg->connectFD);
     free((void*)parg);
-    counter_release();
+    ccounter_release(ccm);
     pthread_exit(NULL);
 }
 
