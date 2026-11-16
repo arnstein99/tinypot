@@ -18,7 +18,7 @@ maximum client tuning
 */
 static const unsigned int Max_Connections = 64;
 
-counter_control* ccm;
+counter_control ccm;
 
 int main(int argc, char* argv[])
 {
@@ -157,7 +157,7 @@ int main(int argc, char* argv[])
         ++num_ports;
     }
 
-    ccm = ccounter_init(Max_Connections);
+    ccounter_init(Max_Connections, &ccm);
 
     /* Print opening message */
     printf("%s Listening on address %s, %d TCP/IP ports:\n",
@@ -205,5 +205,6 @@ int main(int argc, char* argv[])
         }
     }
 
+    ccounter_destroy(&ccm);
     return EXIT_SUCCESS;
 }

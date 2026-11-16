@@ -20,7 +20,7 @@ int counter_query(counter_control *control, int *count);
 int counter_destroy(counter_control *control);
 
 /* Convenience layer */
-counter_control* ccounter_init(unsigned int count);
+void ccounter_init(unsigned int count, counter_control* control);
 void ccounter_request(counter_control* control);
 void ccounter_release(counter_control* control);
 int ccounter_query(counter_control* control);

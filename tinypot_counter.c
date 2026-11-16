@@ -11,6 +11,7 @@
 struct counter_control_impl {
     pthread_mutex_t mutex;
     pthread_cond_t condition;
+    unsigned int max_count;
     unsigned int count;
 };
 
@@ -51,6 +52,7 @@ int counter_init(unsigned int count, counter_control *control)
         return pthread_error(error);
     }
 
+    state->max_count = count;
     state->count = count;
     control->implementation = state;
     return 0;
@@ -121,7 +123,7 @@ int counter_query(counter_control *control, int *count)
         return 1;
     }
 
-    *count = (int)state->count;
+    *count = (int)(state->max_count - state->count);
     error = pthread_mutex_unlock(&state->mutex);
     return pthread_error(error);
 }
@@ -145,15 +147,13 @@ int counter_destroy(counter_control *control)
     return 0;
 }
 
-counter_control* ccounter_init(unsigned int count)
+void ccounter_init(unsigned int count, counter_control* control)
 {
-    counter_control* control = NULL;
     if (counter_init(count, control) != 0)
     {
         perror("counter_init");
         exit(1);
     }
-    return control;
 }
 
 void ccounter_request(counter_control* control)
