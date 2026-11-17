@@ -1,4 +1,4 @@
-static const char* version = "2.5.0";
+static const char* version = "2.5.1";
 
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -16,7 +16,7 @@ static const char* version = "2.5.0";
 /*
 maximum client tuning
 */
-static const unsigned int Max_Connections = 64;
+static const unsigned int Max_Connections = 32;
 
 counter_control ccm;
 
