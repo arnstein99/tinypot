@@ -1,4 +1,4 @@
-static const char* version = "2.5.1";
+static const char* version = "2.6.0";
 
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -23,6 +23,7 @@ counter_control ccm;
 int main(int argc, char* argv[])
 {
     int do_shtup = false;
+    int do_yawn = false;
     int socketFD;
     int port_num;
     int index;
@@ -42,7 +43,9 @@ int main(int argc, char* argv[])
     case 1:
     case 2:
         fprintf(stderr,
-            "Usage: tinypot [-shtup] [address|-] portnum portnum ...\n");
+            "Usage: tinypot [-shtup] [address|-] portnum portnum ...\n"
+            "       tinypot [-yawn]  [address|-] portnum portnum ...\n"
+            "       tinypot          [address|-] portnum portnum ...\n");
         exit(EXIT_FAILURE);
         break;
     default:
@@ -52,13 +55,20 @@ int main(int argc, char* argv[])
     /* Process option, if any. */
     if ((argv[1][0] == '-') && (argv[1][1] != '\0'))
     {
-        if (strcmp("-shtup", argv[1]) != 0)
+        if (strcmp("-shtup", argv[1]) == 0)
+        {
+            do_shtup = true;
+        }
+        else if (strcmp("-yawn", argv[1]) == 0)
+        {
+            do_yawn = true;
+        }
+        else
         {
             fprintf(stderr,
                 "Usage: tinypot [-shtup] [address|-] portnum portnum ...\n");
             exit(EXIT_FAILURE);
         }
-        do_shtup = true;
         ++argv;
         --argc;
     }
@@ -191,8 +201,9 @@ int main(int argc, char* argv[])
                     pds[index].revents);
                 exit(EXIT_FAILURE);
             }
-            if (process_connection(do_shtup, ++con_num, port_array[index],
-                pds[index].fd) != 0)
+            if (process_connection(
+                do_shtup, do_yawn, ++con_num, port_array[index],
+                    pds[index].fd) != 0)
             {
                 /* Too many open files, probably. */
                 for ( ; index < num_ports ; ++index)

@@ -34,6 +34,7 @@ static const int shtup_sndbuf = 1048;
 
 /* Delays will be uniformly distributed between 0 and this number of seconds */
 static const unsigned  MY_MAX = 14;
+static const unsigned YAWN_MULTIPLIER = 10;
 
 /* Seconds to wait before forcing a newline on output */
 #define LINE_WAIT 9
@@ -45,6 +46,7 @@ struct Arg
     int socketFD;
     int connectFD;
     struct sockaddr_in addr;
+    unsigned final_delay;
 };
 
 static void* login_worker(void* arg);
@@ -61,7 +63,8 @@ static void subtractfrom(struct timeval* big, const struct timeval* small);
 
 static pthread_mutex_t print_mutex = PTHREAD_MUTEX_INITIALIZER;
 
-int process_connection(bool do_shtup, int con_num, int port_num, int socketFD)
+int process_connection(
+    bool do_shtup, bool do_yawn, int con_num, int port_num, int socketFD)
 {
     int retval;
     int optval;
@@ -87,6 +90,9 @@ int process_connection(bool do_shtup, int con_num, int port_num, int socketFD)
         return 1;
     }
 
+    /* This prevents an excessive number of open file handles */
+    ccounter_request(&ccm);
+
     connectFD = accept(socketFD,(struct sockaddr*)(&addr), &addrlen);
     if (0 > connectFD)
     {
@@ -97,12 +103,15 @@ int process_connection(bool do_shtup, int con_num, int port_num, int socketFD)
         return 0;
     }
 
+    /* See above comment */
+    ccounter_release(&ccm);
+
     parg->con_num = con_num;
     parg->port_num = port_num;
     parg->socketFD = socketFD;
     parg->connectFD = connectFD;
     parg->addr = addr;
-
+    parg->final_delay = (do_yawn ? YAWN_MULTIPLIER * MY_MAX : MY_MAX);
     retval = do_shtup                                                   ?
         pthread_create(&thread_handle, NULL, shtup_worker, (void*)parg) :
         pthread_create(&thread_handle, NULL, login_worker, (void*)parg) ;
@@ -180,7 +189,7 @@ static void* login_worker(void* arg)
     pthread_mutex_unlock(&print_mutex);
     printing = 0;
     finished = false;
-    my_sleep(MY_MAX);
+    my_sleep(parg->final_delay);
     struct timeval deadline;
     gettimeofday(&deadline, NULL);
     deadline.tv_sec += LINE_WAIT;
@@ -269,7 +278,7 @@ static void* login_worker(void* arg)
             }
             ++iline;
             fflush(writeFD);
-            my_sleep(MY_MAX);
+            my_sleep(parg->final_delay);
             gettimeofday(&deadline, NULL);
             deadline.tv_sec += LINE_WAIT;
         }

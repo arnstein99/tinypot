@@ -7,7 +7,7 @@
 extern counter_control ccm;
 
 int process_connection (
-    bool do_shtup, int con_num, int port_num, int socketFD);
+    bool do_shtup, bool do_yawn, int con_num, int port_num, int socketFD);
 char* my_time (void);
 
 #endif /* _TINYPOT_PROCESS_H_ */
