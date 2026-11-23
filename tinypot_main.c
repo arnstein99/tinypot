@@ -1,4 +1,4 @@
-static const char* version = "2.6.0";
+static const char* version = "2.6.1";
 
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -10,15 +10,7 @@ static const char* version = "2.6.0";
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-#include "tinypot_counter.h"
 #include "tinypot_process.h"
-
-/*
-maximum client tuning
-*/
-static const unsigned int Max_Connections = 32;
-
-counter_control ccm;
 
 int main(int argc, char* argv[])
 {
@@ -43,9 +35,9 @@ int main(int argc, char* argv[])
     case 1:
     case 2:
         fprintf(stderr,
-            "Usage: tinypot [-shtup] [address|-] portnum portnum ...\n"
-            "       tinypot [-yawn]  [address|-] portnum portnum ...\n"
-            "       tinypot          [address|-] portnum portnum ...\n");
+            "Usage: tinypot -shtup [address|-] portnum portnum ...\n"
+            "       tinypot -yawn  [address|-] portnum portnum ...\n"
+            "       tinypot        [address|-] portnum portnum ...\n");
         exit(EXIT_FAILURE);
         break;
     default:
@@ -167,8 +159,6 @@ int main(int argc, char* argv[])
         ++num_ports;
     }
 
-    ccounter_init(Max_Connections, &ccm);
-
     /* Print opening message */
     printf("%s Listening on address %s, %d TCP/IP ports:\n",
         my_time(), listening_address_arg, num_ports);
@@ -177,6 +167,8 @@ int main(int argc, char* argv[])
         printf(" %d", port_array[index]);
     printf("\n");
     fflush(stdout);
+
+    process_init();
 
     con_num = 0;
     while (1)
@@ -216,6 +208,6 @@ int main(int argc, char* argv[])
         }
     }
 
-    ccounter_destroy(&ccm);
+    process_destroy();
     return EXIT_SUCCESS;
 }

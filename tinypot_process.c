@@ -16,6 +16,12 @@
 static const unsigned long e9 =  1000000000;
 static const unsigned long e5 =  100000;
 static const unsigned long e6 =  1000000;
+static counter_control ccm;
+
+/*
+maximum client tuning
+*/
+static const unsigned int Max_Connections = 64;
 
 /*
 shtup tuning
@@ -32,9 +38,10 @@ static const unsigned shtup_max_wait = 30;
 /* Max kernel buffer for writing */
 static const int shtup_sndbuf = 1048;
 
+/* Delay tuning */
 /* Delays will be uniformly distributed between 0 and this number of seconds */
-static const unsigned  MY_MAX = 14;
-static const unsigned YAWN_MULTIPLIER = 10;
+static const unsigned  NORMAL_MAX_DELAY = 14;
+static const unsigned YAWN_MAX_DELAY = 150;
 
 /* Seconds to wait before forcing a newline on output */
 #define LINE_WAIT 9
@@ -62,6 +69,16 @@ static int timed_write(
 static void subtractfrom(struct timeval* big, const struct timeval* small);
 
 static pthread_mutex_t print_mutex = PTHREAD_MUTEX_INITIALIZER;
+
+void process_init(void)
+{
+    ccounter_init(Max_Connections, &ccm);
+}
+
+void process_destroy(void)
+{
+    ccounter_destroy(&ccm);
+}
 
 int process_connection(
     bool do_shtup, bool do_yawn, int con_num, int port_num, int socketFD)
@@ -111,7 +128,7 @@ int process_connection(
     parg->socketFD = socketFD;
     parg->connectFD = connectFD;
     parg->addr = addr;
-    parg->final_delay = (do_yawn ? YAWN_MULTIPLIER * MY_MAX : MY_MAX);
+    parg->final_delay = (do_yawn ? YAWN_MAX_DELAY : NORMAL_MAX_DELAY);
     retval = do_shtup                                                   ?
         pthread_create(&thread_handle, NULL, shtup_worker, (void*)parg) :
         pthread_create(&thread_handle, NULL, login_worker, (void*)parg) ;

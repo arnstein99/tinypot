@@ -4,8 +4,8 @@
 #include <stdbool.h>
 #include "tinypot_counter.h"
 
-extern counter_control ccm;
-
+void process_init(void);
+void process_destroy(void);
 int process_connection (
     bool do_shtup, bool do_yawn, int con_num, int port_num, int socketFD);
 char* my_time (void);
